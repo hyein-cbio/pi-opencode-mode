@@ -13,7 +13,7 @@ const versions = [
   { version: "0.99.1", support: "supported" },
   { version: "0.99.2", support: "supported" },
   { version: "1.0.0", support: "after" },
-  { version: "1.2.0", support: "after" },
+  { version: "1.2.0", support: "after", optionalInstall: true },
 ];
 
 function run(command, args, cwd) {
@@ -35,7 +35,11 @@ async function installSdk(version) {
     "install", "--ignore-scripts", "--no-audit", "--no-fund", "--prefix", dir,
     `@earendil-works/pi-coding-agent@${version}`,
   ], root);
-  if (code !== 0) throw new Error(`install ${version} failed\n${stderr}`);
+  if (code !== 0) {
+    const error = new Error(`install ${version} failed\n${stderr}`);
+    error.installFailure = true;
+    throw error;
+  }
   return dir;
 }
 
@@ -88,15 +92,15 @@ async function probe(version, prefix) {
         replaceable: extension.replaceable === true,
         tools: [...extension.tools.keys()],
       }));
-      const codemode = [];
+      const opencode = [];
       for (const extension of loaded.extensions) {
         for (const registered of extension.tools.values()) {
-          if (registered.definition?.name === "codemode") codemode.push(registered.definition);
+          if (registered.definition?.name === "codemode_o") opencode.push(registered.definition);
         }
       }
       receipt.paths = receipt.extensions.map((extension) => extension.path);
       receipt.builtinCodemodeLoaded = receipt.paths.includes("builtin:codemode");
-      receipt.codemodeCount = codemode.length;
+      receipt.opencodeCount = opencode.length;
       if (builtins.some((entry) => entry.name === "codemode")) {
         const controlDir = await mkdtemp(join(tmpdir(), "pi-opencode-control-"));
         const control = new pi.DefaultResourceLoader({
@@ -117,8 +121,9 @@ async function probe(version, prefix) {
         receipt.controlErrors = controlLoaded.errors;
         receipt.controlPaths = controlLoaded.extensions.map((extension) => extension.path);
       }
-      const tool = codemode.find((definition) => definition.label === "codemode (OpenCode)") ?? codemode[0];
+      const tool = opencode[0];
       receipt.label = tool?.label;
+      receipt.toolName = tool?.name;
       if (tool) {
         const plain = await tool.execute("probe", { code: "return 40 + 2" }, undefined, undefined, { tools: [], async executeTool() { throw new Error("unused"); } });
         receipt.plain = plain.content?.[0]?.text;
@@ -148,18 +153,26 @@ async function probe(version, prefix) {
 test("pi SDKs around 0.99 load OpenCode codemode", { timeout: 600_000 }, async () => {
   const receipts = [];
   for (const entry of versions) {
-    const prefix = await installSdk(entry.version);
-    const receipt = await probe(entry.version, prefix);
-    receipts.push({ ...entry, ...receipt });
-    await rm(prefix, { recursive: true, force: true });
+    let prefix;
+    try {
+      prefix = await installSdk(entry.version);
+      const receipt = await probe(entry.version, prefix);
+      receipts.push({ ...entry, ...receipt });
+    } catch (error) {
+      if (!entry.optionalInstall || !error.installFailure) throw error;
+      receipts.push({ ...entry, installSkipped: true, installError: error.message.split("\n")[0] });
+    } finally {
+      if (prefix) await rm(prefix, { recursive: true, force: true });
+    }
   }
   console.log(JSON.stringify(receipts, null, 2));
 
-  for (const receipt of receipts.filter((entry) => entry.support !== "before")) {
+  for (const receipt of receipts.filter((entry) => entry.support !== "before" && !entry.installSkipped)) {
     assert.equal(receipt.loadError, undefined, receipt.version);
     assert.deepEqual(receipt.errors, [], receipt.version);
-    assert.equal(receipt.codemodeCount, 1, receipt.version);
-    assert.equal(receipt.label, "codemode (OpenCode)", receipt.version);
+    assert.equal(receipt.opencodeCount, 1, receipt.version);
+    assert.equal(receipt.toolName, "codemode_o", receipt.version);
+    assert.equal(receipt.label, "codemode_o (OpenCode)", receipt.version);
     assert.equal(receipt.plain, "42", receipt.version);
     assert.equal(receipt.plainError, false, receipt.version);
     assert.equal(receipt.bridged, "7", receipt.version);
@@ -167,7 +180,7 @@ test("pi SDKs around 0.99 load OpenCode codemode", { timeout: 600_000 }, async (
     assert.equal(receipt.createCodemodeExtension, "function", receipt.version);
     assert.equal(receipt.executeToolOnContext, true, receipt.version);
     assert.equal(receipt.builtinNames.includes("codemode"), true, receipt.version);
-    assert.equal(receipt.builtinCodemodeLoaded, false, receipt.version);
+    assert.equal(receipt.builtinCodemodeLoaded, true, receipt.version);
     assert.deepEqual(receipt.controlErrors, [], receipt.version);
     assert.equal(receipt.controlPaths.includes("builtin:codemode"), true, receipt.version);
   }

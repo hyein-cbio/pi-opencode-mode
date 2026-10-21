@@ -2,7 +2,10 @@ import { CodeMode, Tool, toolError } from "@opencode/codemode";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
-const TOOL_NAME = "codemode";
+const TOOL_NAME = "codemode_o";
+// Pi's built-in `codemode` stays registered. Guest programs cannot call either code tool.
+const HIDDEN_FROM_GUEST = new Set(["codemode", TOOL_NAME]);
+// TODO: route.js may later choose between those tools. execute() does not call it.
 const LIMITS = { timeoutMs: 30_000, maxToolCalls: 64, maxOutputBytes: 65_536 };
 const BASE = [
   "Confined OpenCode CodeMode v2, not Pi's QuickJS codemode.",
@@ -43,7 +46,7 @@ function codeModeTools(ctx, signal) {
   const tools = {};
   for (const tool of ctx?.tools ?? []) {
     const name = tool?.name;
-    if (typeof name !== "string" || name.length === 0 || name === TOOL_NAME) continue;
+    if (typeof name !== "string" || name.length === 0 || HIDDEN_FROM_GUEST.has(name)) continue;
     tools[name] = Tool.make({
       description: typeof tool.description === "string" && tool.description ? tool.description : name,
       input: tool.parameters && typeof tool.parameters === "object" ? tool.parameters : { type: "object" },
@@ -61,11 +64,11 @@ export function createOpenCodeModeExtension() {
   return function openCodeModeExtension(pi) {
     pi.registerTool({
       name: TOOL_NAME,
-      label: "codemode (OpenCode)",
+      label: "codemode_o (OpenCode)",
       description: BASE,
       promptSnippet: "Run confined OpenCode CodeMode that calls other pi tools",
       promptGuidelines: [
-        "Use codemode to compute or to chain already callable pi tools inside one confined OpenCode CodeMode program.",
+        "Use codemode_o for a short confined OpenCode CodeMode program. Pi's built-in codemode remains available and is not selected here.",
       ],
       parameters: Type.Object({
         code: Type.String({ description: "OpenCode CodeMode source." }),
@@ -75,7 +78,7 @@ export function createOpenCodeModeExtension() {
       prepareLoadout(loadout) {
         const names = [];
         for (const tool of loadout?.callable ?? []) {
-          if (typeof tool?.name === "string" && tool.name !== TOOL_NAME) names.push(tool.name);
+          if (typeof tool?.name === "string" && !HIDDEN_FROM_GUEST.has(tool.name)) names.push(tool.name);
         }
         return { descriptions: { [TOOL_NAME]: `${BASE}\nCallable tools: ${names.join(", ") || "(none)"}` } };
       },

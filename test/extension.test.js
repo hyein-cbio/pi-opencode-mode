@@ -32,7 +32,7 @@ test("package is one OpenCode-backed pi extension", () => {
 
 test("runs a fresh confined program and calls one pi tool", async () => {
   const tool = registeredTool();
-  assert.equal(tool.name, "codemode");
+  assert.equal(tool.name, "codemode_o");
   assert.equal(tool.exposure, "model-only");
 
   const plain = await tool.execute("c1", { code: "return 40 + 2" }, undefined, undefined, ctxWith([]));
@@ -42,6 +42,10 @@ test("runs a fresh confined program and calls one pi tool", async () => {
   const calls = [];
   const host = ctxWith([{
     name: "codemode",
+    description: "native pi codemode",
+    async run() { throw new Error("routed to native codemode"); },
+  }, {
+    name: "codemode_o",
     description: "must not be exposed",
     async run() { throw new Error("recursive"); },
   }, {
@@ -67,12 +71,18 @@ test("runs a fresh confined program and calls one pi tool", async () => {
   const imported = await tool.execute("c4", { code: "import fs from \"node:fs\"" }, undefined, undefined, ctxWith([]));
   assert.equal(imported.isError, true);
   assert.match(imported.content[0].text, /^ParseError:/);
+
+  const nested = await tool.execute("c5", {
+    code: "return tools.codemode({ code: \"return 1\" })",
+  }, undefined, undefined, host);
+  assert.equal(nested.isError, true);
+  assert.match(nested.content[0].text, /UnknownTool/);
 });
 
 test("prepareLoadout lists callable tools and omits itself", () => {
   const tool = registeredTool();
   const changes = tool.prepareLoadout({
-    callable: [{ name: "read" }, { name: "codemode" }, { name: "grep" }],
+    callable: [{ name: "read" }, { name: "codemode" }, { name: "codemode_o" }, { name: "grep" }],
   });
-  assert.match(changes.descriptions.codemode, /Callable tools: read, grep/);
+  assert.match(changes.descriptions.codemode_o, /Callable tools: read, grep/);
 });

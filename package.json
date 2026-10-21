@@ -4,12 +4,13 @@
   "private": true,
   "license": "MIT",
   "type": "module",
-  "description": "Pi extension that runs OpenCode CodeMode v2 as the codemode tool.",
+  "description": "Pi extension that runs OpenCode CodeMode v2 as the codemode_o tool.",
   "engines": {
     "node": ">=22.19.0"
   },
   "files": [
     "index.js",
+    "route.js",
     "LICENSE",
     "README.md"
   ],
