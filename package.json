@@ -1,0 +1,35 @@
+{
+  "name": "pi-opencode-mode",
+  "version": "0.0.1",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "Pi extension that runs OpenCode CodeMode v2 as the codemode tool.",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "files": [
+    "index.js",
+    "LICENSE",
+    "README.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.js"
+    ]
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@opencode/codemode": "2.1.0",
+    "effect": "4.0.1"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.99.0",
+    "typebox": "*"
+  },
+  "devDependencies": {
+    "typebox": "1.3.27"
+  }
+}
