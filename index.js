@@ -12,7 +12,8 @@ const BASE = [
   "Write a JavaScript-like program. Use return, or a final expression. undefined becomes null.",
   "Call pi tools that are already callable as await tools.<name>({ ... }).",
   "No import, process, require, eval, Function, filesystem, network, or timers except through those tools.",
-  `Each run is fresh. Limits: ${LIMITS.timeoutMs}ms, ${LIMITS.maxToolCalls} tool calls, ${LIMITS.maxOutputBytes} output bytes.`,
+  `Each run is fresh. Limits: ${LIMITS.timeoutMs}ms before interruption (host cleanup is awaited), ${LIMITS.maxToolCalls} tool calls, ${LIMITS.maxOutputBytes} final UTF-8 text bytes including logs and diagnostics.`,
+  "Warnings and truncation are visible; truncated data is a preview, not complete JSON. Host cancellation requires cooperative tools.",
 ].join(" ");
 
 function message(error) {
@@ -51,13 +52,90 @@ function codeModeTools(ctx, signal) {
       description: typeof tool.description === "string" && tool.description ? tool.description : name,
       input: tool.parameters && typeof tool.parameters === "object" ? tool.parameters : { type: "object" },
       output: { description: "JSON value" },
-      execute: (input) => Effect.tryPromise({
-        try: () => callPiTool(ctx, name, input, signal),
-        catch: (error) => toolError(message(error)),
-      }),
+      execute: (input) => {
+        let pending;
+        return Effect.ensuring(Effect.tryPromise({
+          try: (interruption) => {
+            const combined = signal ? AbortSignal.any([signal, interruption]) : interruption;
+            pending = callPiTool(ctx, name, input, combined);
+            return pending;
+          },
+          catch: (error) => toolError(message(error)),
+        }), Effect.promise(async () => {
+          // tryPromise interrupts immediately. Drain host cleanup too, so Pi's
+          // permission/result hooks and nested-call audit finish before the root.
+          await pending?.catch(() => {});
+        }));
+      },
     });
   }
   return tools;
+}
+
+// Bound before encoding arbitrary diagnostics; never allocate a buffer for an
+// unbounded host error. Cut only at UTF-8 boundaries (including astral text).
+function prefix(text, maxBytes) {
+  const bytes = Buffer.from(text.slice(0, maxBytes + 1), "utf8");
+  let end = Math.min(bytes.length, maxBytes);
+  if (end < bytes.length) {
+    while (end > 0 && (bytes[end] & 0xc0) === 0x80) end--;
+  }
+  return bytes.subarray(0, end).toString("utf8");
+}
+
+function diagnostics(result) {
+  const budget = 8192;
+  let used = 0;
+  let truncated = false;
+  function bound(diagnostic) {
+    const kind = prefix(diagnostic.kind, 64);
+    const message = prefix(diagnostic.message, 1024);
+    const suggestions = diagnostic.suggestions?.slice(0, 3).map((text) => prefix(text, 128));
+    truncated ||= kind !== diagnostic.kind || message !== diagnostic.message ||
+      (diagnostic.suggestions !== undefined && (diagnostic.suggestions.length > 3 ||
+        suggestions.some((text, index) => text !== diagnostic.suggestions[index])));
+    return { kind, message, ...(diagnostic.location ? { location: diagnostic.location } : {}), ...(suggestions ? { suggestions } : {}) };
+  }
+  const error = result.ok ? undefined : bound(result.error);
+  used += error ? Buffer.byteLength(JSON.stringify(error)) : 0;
+  const warnings = [];
+  const original = result.warnings ?? [];
+  for (const warning of original) {
+    const kept = bound(warning);
+    const size = Buffer.byteLength(JSON.stringify(kept)) + 1;
+    if (used + size > budget - 256) break;
+    used += size;
+    warnings.push(kept);
+  }
+  truncated ||= warnings.length < original.length;
+  if (truncated) warnings.push({ kind: "Truncated", message: "Diagnostic text or additional warnings truncated by the diagnostic limit." });
+  return { error, warnings, truncated };
+}
+
+function renderResult(result) {
+  const diagnostic = diagnostics(result);
+  // Diagnostics precede data: full-size values/logs cannot hide warnings or errors.
+  const notices = [
+    ...(diagnostic.error ? [`${diagnostic.error.kind}: ${diagnostic.error.message}\n`] : []),
+    ...diagnostic.warnings.map((warning) => `Warning ${warning.kind}: ${warning.message}\n`),
+  ].join("");
+  // Upstream has already bounded value/log data. JSON escaping can expand that
+  // bounded input (at most 6x); apply the final guard AFTER this encoding.
+  const body = [...(result.logs ?? []), ...(result.ok ? [JSON.stringify(result.value) ?? "null"] : [])].join("\n");
+  const truncated = result.truncated === true || diagnostic.truncated ||
+    Buffer.byteLength(notices) + Buffer.byteLength(body) > LIMITS.maxOutputBytes;
+  const header = notices + (truncated ? "[Output truncated; data below is a preview, not a complete JSON value.]\n" : "");
+  const text = header + prefix(body, LIMITS.maxOutputBytes - Buffer.byteLength(header));
+  return {
+    content: [{ type: "text", text }],
+    details: {
+      ok: result.ok, toolCalls: result.toolCalls,
+      ...(diagnostic.error ? { error: diagnostic.error } : {}),
+      ...(diagnostic.warnings.length ? { warnings: diagnostic.warnings } : {}),
+      ...(truncated ? { truncated: true } : {}),
+    },
+    ...(result.ok ? {} : { isError: true }),
+  };
 }
 
 export function createOpenCodeModeExtension() {
@@ -87,21 +165,13 @@ export function createOpenCodeModeExtension() {
         try {
           const runtime = CodeMode.make({ tools: codeModeTools(ctx, signal), limits: LIMITS });
           const result = await Effect.runPromise(runtime.execute(code), signal ? { signal } : undefined);
-          const text = result.ok
-            ? JSON.stringify(result.value)
-            : `${result.error.kind}: ${result.error.message}`;
-          const logs = result.logs?.length ? `${result.logs.join("\n")}\n` : "";
-          return {
-            content: [{ type: "text", text: logs + text }],
-            details: { ok: result.ok, toolCalls: result.toolCalls, ...(result.ok ? {} : { error: result.error }) },
-            ...(result.ok ? {} : { isError: true }),
-          };
+          return renderResult(result);
         } catch (error) {
-          return {
-            content: [{ type: "text", text: signal?.aborted ? "Script interrupted" : message(error) }],
-            details: { ok: false },
-            isError: true,
-          };
+          return renderResult({
+            ok: false,
+            error: { kind: "ExecutionFailure", message: signal?.aborted ? "Script interrupted" : message(error) },
+            toolCalls: [],
+          });
         }
       },
     });

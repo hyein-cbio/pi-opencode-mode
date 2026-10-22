@@ -12,7 +12,8 @@
     "index.js",
     "route.js",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "TESTING.md"
   ],
   "pi": {
     "extensions": [
@@ -20,7 +21,8 @@
     ]
   },
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/extension.test.js test/route.test.js test/boundaries.test.js test/session.test.js",
+    "test:pi-versions": "node --test test/pi-versions.test.js"
   },
   "dependencies": {
     "@opencode/codemode": "2.1.0",
