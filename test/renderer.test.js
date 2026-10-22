@@ -78,6 +78,16 @@ test("ordinary result layout matches native codemode with the same output and du
   }
 });
 
+test("result previews preserve indentation and trailing blank lines", () => {
+  const value = result("  indented log\n\n");
+  const snapshot = structuredClone(value);
+  for (const expanded of [false, true]) {
+    assert.equal(render(value, { expanded }), "\n  indented log\n\n");
+  }
+  assert.deepEqual(value, snapshot);
+  assert.deepEqual(lines(tool().renderResult(result(""), { expanded: true, isPartial: false }, theme, context())), []);
+});
+
 test("warnings and incomplete-output notice stay visible when data is collapsed", () => {
   colors.length = 0;
   const value = result("data\n".repeat(100), { durationMs: 500, truncated: true, warnings: [{ kind: "Truncated", message: "clipped" }] });

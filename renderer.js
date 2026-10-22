@@ -60,7 +60,7 @@ export const openCodeRenderers = {
     if (!isPartial) {
       // Old sessions and hook-replaced results may not have our details. Render
       // their content as-is; never reconstruct output from diagnostic metadata.
-      const output = (result.content ?? []).filter((block) => block.type === "text").map((block) => block.text).join("\n").trim();
+      const output = (result.content ?? []).filter((block) => block.type === "text").map((block) => block.text).join("\n");
       const notices = [];
       const warnings = result.details?.warnings?.length ?? 0;
       if (warnings) notices.push(`${warnings} warning${warnings === 1 ? "" : "s"}`);
@@ -69,7 +69,7 @@ export const openCodeRenderers = {
         component.addChild(new Spacer(1));
         component.addChild(new Text(theme.fg("warning", notices.join(" · ")), 0, 0));
       }
-      if (output) {
+      if (output.length > 0) {
         const color = context.isError || result.details?.ok === false ? "error" : "toolOutput";
         const styled = output.replace(/\t/g, "   ").split("\n").map((line) => theme.fg(color, line)).join("\n");
         component.addChild(new Spacer(1));
