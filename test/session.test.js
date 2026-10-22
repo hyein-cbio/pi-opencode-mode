@@ -100,7 +100,9 @@ test("isolated real Pi SDK session", { skip: !sdk && "set PI_OPENCODE_SDK to a l
       await pending;
       const result = session.messages.findLast((entry) => entry.role === "toolResult" && entry.toolCallId === id);
       assert.ok(result);
-      t.diagnostic(JSON.stringify({ code: code.slice(0, 90), isError: result.isError, contentBytes: Buffer.byteLength(result.content[0].text), nestedCalls: result.nestedCalls }));
+      assert.ok(Number.isFinite(result.details?.durationMs), "duration survives real session storage");
+      assert.ok(result.details.durationMs >= 0);
+      t.diagnostic(JSON.stringify({ code: code.slice(0, 90), isError: result.isError, durationMs: result.details.durationMs, contentBytes: Buffer.byteLength(result.content[0].text), nestedCalls: result.nestedCalls }));
       return result;
     }
     await t.test("host hooks, schema validation, permissions and recursion boundary", async () => {
@@ -119,6 +121,17 @@ test("isolated real Pi SDK session", { skip: !sdk && "set PI_OPENCODE_SDK to a l
       assert.equal(state.deniedRuns, 0);
       const hidden = await run('return await tools.codemode({code: "return 1"});');
       assert.equal(hidden.isError, true);
+    });
+    await t.test("native-required source is rejected before host effects in a real session", async () => {
+      const before = state.echoRuns;
+      const result = await run('await tools.safe_echo({value: 1}); text("done");');
+      assert.equal(result.isError, true);
+      assert.equal(result.details.error.kind, "NativeCodemodeRequired");
+      assert.equal(result.details.route.route, "codemode");
+      assert.match(result.content[0].text, /not executed/i);
+      assert.equal(state.echoRuns, before);
+      assert.equal(result.nestedCalls?.calls?.length ?? 0, 0);
+      assert.ok(session.getActiveToolNames().includes("codemode"));
     });
     await t.test("early return and race drain cancelled nested calls", async () => {
       // Immediate cancellation can correctly stop a call before its body starts.

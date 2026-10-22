@@ -26,7 +26,7 @@ function ctxWith(tools) {
 test("package is one OpenCode-backed pi extension", () => {
   const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
   assert.deepEqual(pkg.pi.extensions, ["./index.js"]);
-  assert.deepEqual(Object.keys(pkg.dependencies).sort(), ["@opencode/codemode", "effect"]);
+  assert.deepEqual(Object.keys(pkg.dependencies).sort(), ["@opencode/codemode", "acorn", "effect"]);
   assert.equal(pkg.dependencies["@opencode/codemode"], "2.1.0");
 });
 
@@ -70,7 +70,8 @@ test("runs a fresh confined program and calls one pi tool", async () => {
 
   const imported = await tool.execute("c4", { code: "import fs from \"node:fs\"" }, undefined, undefined, ctxWith([]));
   assert.equal(imported.isError, true);
-  assert.match(imported.content[0].text, /^ParseError:/);
+  assert.match(imported.content[0].text, /^NativeCodemodeRequired:/);
+  assert.equal(imported.details.route.route, "codemode");
 
   const nested = await tool.execute("c5", {
     code: "return tools.codemode({ code: \"return 1\" })",

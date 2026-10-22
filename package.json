@@ -11,6 +11,7 @@
   "files": [
     "index.js",
     "route.js",
+    "renderer.js",
     "LICENSE",
     "README.md",
     "TESTING.md"
@@ -21,15 +22,17 @@
     ]
   },
   "scripts": {
-    "test": "node --test test/extension.test.js test/route.test.js test/boundaries.test.js test/session.test.js",
+    "test": "node --test test/extension.test.js test/route.test.js test/renderer.test.js test/boundaries.test.js test/session.test.js",
     "test:pi-versions": "node --test test/pi-versions.test.js"
   },
   "dependencies": {
     "@opencode/codemode": "2.1.0",
+    "acorn": "8.15.0",
     "effect": "4.0.1"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": ">=0.99.0",
+    "@earendil-works/pi-tui": ">=0.99.0",
     "typebox": "*"
   },
   "devDependencies": {

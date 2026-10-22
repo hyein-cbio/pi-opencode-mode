@@ -1,5 +1,48 @@
 # Lifecycle/output regression evidence
 
+## Native-style presentation verification
+
+- `npm test`: **37 passed, 0 failed**, 1 explicit SDK-suite skip.
+- Local Pi SDK **1.4.0** scripted session suite: **8 passed, 0 failed**.
+  Every stored result (including abort, timeout, and preflight rejection) keeps
+  finite, nonnegative `details.durationMs`.
+- Eight renderer tests cover highlighted source, native-style duration units,
+  visual-line collapse/expansion, narrow Unicode output, warnings/truncation,
+  errors, partial results, legacy/restored rows, component reuse and invalidation.
+  A parity test captures the native tool through its public extension factory
+  (without executing it) and compares result component lines at the same width,
+  expansion state, output and duration.
+- Existing boundary tests verify that timing includes asynchronous cleanup,
+  including the 30,050 ms cleanup probe. The model-visible content and its exact
+  65,536-byte budget remain unchanged.
+- `npm pack --dry-run --json` includes `renderer.js`. No install, network/model
+  call, personal configuration access, or real mutation tools were needed.
+  Rendering was checked programmatically with actual TUI components; no manual
+  GUI/terminal screenshot verification or historical install matrix was run.
+
+## Routing implementation verification
+
+The execution-preflight router is now active (the evidence below this section
+is historical and describes the earlier lifecycle/output change).
+
+- `npm test`: **29 passed, 0 failed**, 1 explicit SDK-suite skip.
+- Local Pi SDK **1.4.0**: **8 passed, 0 failed** (parent plus seven subtests),
+  using the same isolated scripted-session harness described below.
+- Router tests cover explicit native preference, invalid/empty source,
+  UTF-8/line/node/depth limits, Pi globals and options, unsupported syntax,
+  escaped identifiers, and false positives in comments/strings/property names.
+- Unit and actual-session tests verify that a Pi-only reference after a host
+  call causes rejection before **any** host effect. The unit test also ensures
+  no tool-context access/delegation on this path and no replay after execution
+  has already produced an effect and then failed.
+- Native routing is a preflight rejection with `NativeCodemodeRequired`, not a
+  transparent handoff. Built-in `codemode` stays model-only and unchanged.
+- Acorn 8.15.0 was already present transitively and is now a pinned direct
+  dependency. No install or network/model call was needed. The historical
+  install-enabled version matrix was not run for this change.
+
+## Historical lifecycle/output evidence
+
 Baseline: `9edcea51b4527d78603692abe351a10449c516d2` (before implementation).
 Runtime used: Node 26.12.1, `@opencode/codemode` 2.1.0, Effect 4.0.1,
 TypeBox 1.3.27. Dependencies were reused from existing local installations via

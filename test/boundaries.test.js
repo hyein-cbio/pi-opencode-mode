@@ -52,6 +52,7 @@ test("early return aborts and drains cooperative host work before reporting succ
   assert.equal(state.aborted, 1);
   assert.equal(state.settled, 1);
   assert.equal(state.signal.aborted, true);
+  assert.ok(result.details.durationMs >= 10, "timing includes asynchronous host cleanup");
   await delay(130);
   assert.equal(state.finished, 0);
 });
@@ -93,6 +94,7 @@ test("literal 30-second timeout aborts cooperative host work", { timeout: 35_000
   assert.match(returned.content[0].text, /Warning TimeoutExceeded/);
   assert.equal(returned.details.warnings[0].kind, "TimeoutExceeded");
   assert.equal(cleanup.state.settled, 1);
+  assert.ok(returned.details.durationMs >= 30_000, "timing includes delayed cleanup after early return");
   assert.equal(result.isError, true);
   assert.match(result.content[0].text, /TimeoutExceeded/);
   assert.equal(state.aborted, 1);

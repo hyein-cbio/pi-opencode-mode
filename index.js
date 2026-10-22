@@ -1,15 +1,17 @@
 import { CodeMode, Tool, toolError } from "@opencode/codemode";
 import { Effect } from "effect";
 import { Type } from "typebox";
+import { ROUTE_LIMITS, selectCodemodeRoute } from "./route.js";
+import { openCodeRenderers } from "./renderer.js";
 
 const TOOL_NAME = "codemode_o";
 // Pi's built-in `codemode` stays registered. Guest programs cannot call either code tool.
 const HIDDEN_FROM_GUEST = new Set(["codemode", TOOL_NAME]);
-// TODO: route.js may later choose between those tools. execute() does not call it.
 const LIMITS = { timeoutMs: 30_000, maxToolCalls: 64, maxOutputBytes: 65_536 };
 const BASE = [
   "Confined OpenCode CodeMode v2, not Pi's QuickJS codemode.",
   "Write a JavaScript-like program. Use return, or a final expression. undefined becomes null.",
+  `Only short supported programs (at most ${ROUTE_LIMITS.maxSourceBytes} UTF-8 source bytes and ${ROUTE_LIMITS.maxLines} lines) run here. Use Pi codemode for longer/uncertain syntax, @options, text/image/exit, store/load, discovery globals, or models. Native-required programs are rejected BEFORE execution; call codemode yourself, never replay after an execution failure.`,
   "Call pi tools that are already callable as await tools.<name>({ ... }).",
   "No import, process, require, eval, Function, filesystem, network, or timers except through those tools.",
   `Each run is fresh. Limits: ${LIMITS.timeoutMs}ms before interruption (host cleanup is awaited), ${LIMITS.maxToolCalls} tool calls, ${LIMITS.maxOutputBytes} final UTF-8 text bytes including logs and diagnostics.`,
@@ -146,13 +148,14 @@ export function createOpenCodeModeExtension() {
       description: BASE,
       promptSnippet: "Run confined OpenCode CodeMode that calls other pi tools",
       promptGuidelines: [
-        "Use codemode_o for a short confined OpenCode CodeMode program. Pi's built-in codemode remains available and is not selected here.",
+        "Choose codemode_o only for short OpenCode-subset programs. Otherwise use Pi's unchanged codemode, especially for Pi globals, options, models, or uncertain syntax. A NativeCodemodeRequired result means no source ran; there is no automatic delegation or replay.",
       ],
       parameters: Type.Object({
         code: Type.String({ description: "OpenCode CodeMode source." }),
       }),
       exposure: "model-only",
       defaultActive: true,
+      ...openCodeRenderers,
       prepareLoadout(loadout) {
         const names = [];
         for (const tool of loadout?.callable ?? []) {
@@ -161,17 +164,34 @@ export function createOpenCodeModeExtension() {
         return { descriptions: { [TOOL_NAME]: `${BASE}\nCallable tools: ${names.join(", ") || "(none)"}` } };
       },
       async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+        const startedAt = performance.now();
         const code = typeof params?.code === "string" ? params.code : "";
+        const route = selectCodemodeRoute({ requested: TOOL_NAME, code });
+        const routed = (result) => ({
+          ...result,
+          details: { ...result.details, route, durationMs: performance.now() - startedAt },
+        });
+        if (route.route !== TOOL_NAME) {
+          // Built-in codemode is model-only: do not bypass Pi's invocation boundary.
+          return routed(renderResult({
+            ok: false,
+            error: {
+              kind: "NativeCodemodeRequired",
+              message: `Source was not executed (${route.reasons.join(", ")}). Use Pi's built-in codemode with this source. No automatic delegation or replay was attempted.`,
+            },
+            toolCalls: [],
+          }));
+        }
         try {
           const runtime = CodeMode.make({ tools: codeModeTools(ctx, signal), limits: LIMITS });
           const result = await Effect.runPromise(runtime.execute(code), signal ? { signal } : undefined);
-          return renderResult(result);
+          return routed(renderResult(result));
         } catch (error) {
-          return renderResult({
+          return routed(renderResult({
             ok: false,
             error: { kind: "ExecutionFailure", message: signal?.aborted ? "Script interrupted" : message(error) },
             toolCalls: [],
-          });
+          }));
         }
       },
     });
