@@ -23,14 +23,38 @@ Took 0.0s
 Native `codemode` remains available alongside it. This extension adds an
 interpreter choice, not an OpenCode server or a replacement Pi CLI.
 
+## Install
+
+Install the versioned npm package in Pi:
+
+```sh
+pi install npm:pi-opencode-mode@0.1.0
+```
+
+Or install the tagged Git source:
+
+```sh
+pi install git:github.com/hyein-cbio/pi-opencode-mode@v0.1.0
+```
+
+Restart Pi after installation. To explicitly enable both code tools:
+
+```sh
+pi --tools read,find,codemode,codemode_o
+```
+
+The walkthrough below uses a source checkout so its example files are available
+in the working directory. Installing the package does not copy that checkout
+into your project.
+
 ## Quick start
 
 Requires **Node.js >= 22.19.0**, npm, Git, and **Pi >= 0.99.0, < 2.0.0** with a configured model/provider. Check `node --version` and `pi --version`; if you are new to Pi, see its [quickstart](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/quickstart.md). In Pi, `/login` configures a provider and `/model` chooses a model. The extension does not need an OpenCode account or server; asking Pi to call it still uses your configured model.
 
-1. **Install from source.** This checkout workflow does not depend on npm publication. Until the repository is public, cloning requires repository access.
+1. **Install from source for the walkthrough.** Use the release tag so the examples match this version.
 
    ```sh
-   git clone https://github.com/hyein-cbio/pi-opencode-mode.git
+   git clone --branch v0.1.0 https://github.com/hyein-cbio/pi-opencode-mode.git
    cd pi-opencode-mode
    npm ci
    ```

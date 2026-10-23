@@ -1,8 +1,11 @@
 {
   "name": "pi-opencode-mode",
   "version": "0.1.0",
-  "private": true,
   "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "type": "module",
   "description": "Pi extension that runs OpenCode CodeMode v2 as the codemode_o tool.",
   "repository": {

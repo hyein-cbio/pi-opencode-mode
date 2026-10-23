@@ -2,9 +2,8 @@
 
 ## Supported versions
 
-Security fixes target the latest released version. Version 0.1.0 is currently
-being prepared; until it is released, reports against the default branch are
-welcome. See [CHANGELOG.md](CHANGELOG.md) for release status.
+Security fixes target the latest released version, currently **0.1.0**.
+See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## Reporting a vulnerability
 

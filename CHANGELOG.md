@@ -1,9 +1,8 @@
 # Changelog
 
-## 0.1.0 — unreleased
+## 0.1.0 — 2026-10-23
 
-Initial public-release preparation. No release tag or npm publication is implied
-by this entry.
+Initial public release.
 
 ### Features
 
