@@ -13,6 +13,7 @@ const BASE = [
   "Write a JavaScript-like program. Use return, or a final expression. undefined becomes null.",
   `Only short supported programs (at most ${ROUTE_LIMITS.maxSourceBytes} UTF-8 source bytes and ${ROUTE_LIMITS.maxLines} lines) run here. Use Pi codemode for longer/uncertain syntax, @options, text/image/exit, store/load, discovery globals, or models. Native-required programs are rejected BEFORE execution; call codemode yourself, never replay after an execution failure.`,
   "Call pi tools that are already callable as await tools.<name>({ ... }).",
+  'Inspect unfamiliar tool arguments with synchronous search({ query: "tools.read", limit: 1 }). It returns items with path, description, and signature, plus remaining and next for pagination. This OpenCode global only lists already-callable tools, does not activate tools, and counts toward the tool-call limit.',
   "No import, process, require, eval, Function, filesystem, network, or timers except through those tools.",
   `Each run is fresh. Limits: ${LIMITS.timeoutMs}ms before interruption (host cleanup is awaited), ${LIMITS.maxToolCalls} tool calls, ${LIMITS.maxOutputBytes} final UTF-8 text bytes including logs and diagnostics.`,
   "Warnings and truncation are visible; truncated data is a preview, not complete JSON. Host cancellation requires cooperative tools.",

@@ -1,5 +1,21 @@
 # Lifecycle/output regression evidence
 
+## Onboarding and discovery documentation verification
+
+- `npm test`: **41 passed, 0 failed**, 1 explicit SDK-suite skip.
+- Local Pi SDK **1.4.0** scripted session suite: **8 passed, 0 failed**.
+- `test/readme.test.js` extracts the JavaScript blocks directly from the README
+  and runs them through `codemode_o`. It checks the first `return 42`, the
+  parallel `read`/`find` overview, exact `search` input signatures, browsing and
+  pagination, and the subsequent file read. Host calls use safe in-memory
+  stubs; discovery makes no host calls and excludes both code tools.
+- CLI loading/tool-selection instructions were checked against the installed Pi
+  1.4.0 documentation. No fresh clone/dependency install, paid-model onboarding
+  run, or performance comparison was performed. The snippets test runtime/API
+  compatibility, not a live provider's willingness to select the requested tool.
+- Runtime execution is unchanged; the tool description now also explains the
+  existing synchronous `search` interface.
+
 ## Native-style presentation verification
 
 - `npm test`: **37 passed, 0 failed**, 1 explicit SDK-suite skip.
