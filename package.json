@@ -1,10 +1,19 @@
 {
   "name": "pi-opencode-mode",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "license": "MIT",
   "type": "module",
   "description": "Pi extension that runs OpenCode CodeMode v2 as the codemode_o tool.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hyein-cbio/pi-opencode-mode.git"
+  },
+  "homepage": "https://github.com/hyein-cbio/pi-opencode-mode#readme",
+  "bugs": {
+    "url": "https://github.com/hyein-cbio/pi-opencode-mode/issues"
+  },
+  "keywords": ["pi-package", "pi-extension", "opencode", "codemode"],
   "engines": {
     "node": ">=22.19.0"
   },
@@ -14,7 +23,9 @@
     "renderer.js",
     "LICENSE",
     "README.md",
-    "TESTING.md"
+    "TESTING.md",
+    "CHANGELOG.md",
+    "SECURITY.md"
   ],
   "pi": {
     "extensions": [
@@ -31,8 +42,8 @@
     "effect": "4.0.1"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": ">=0.99.0",
-    "@earendil-works/pi-tui": ">=0.99.0",
+    "@earendil-works/pi-coding-agent": ">=0.99.0 <2.0.0",
+    "@earendil-works/pi-tui": ">=0.99.0 <2.0.0",
     "typebox": "*"
   },
   "devDependencies": {

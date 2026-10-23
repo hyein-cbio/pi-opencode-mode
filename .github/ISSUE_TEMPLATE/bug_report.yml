@@ -1,0 +1,29 @@
+name: Bug report
+description: Report a reproducible problem without secrets or vulnerability details.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For security issues, follow [SECURITY.md](https://github.com/hyein-cbio/pi-opencode-mode/blob/main/SECURITY.md).
+        Do not include credentials, private tool output, or vulnerability details here.
+  - type: textarea
+    id: versions
+    attributes:
+      label: Versions and environment
+      description: Include extension version/commit, pi --version, node --version, and OS.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include startup flags and a short program, preferably using safe mock tools.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+      description: Include sanitized errors and whether native codemode or codemode_o ran.
+    validations:
+      required: true

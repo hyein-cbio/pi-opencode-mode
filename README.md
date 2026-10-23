@@ -4,13 +4,30 @@ A small Pi extension that leaves native `codemode` in place and lets you choose 
 
 It registers **`codemode_o`**, backed by `@opencode/codemode` 2.1.0: another execution option for short, self-contained JavaScript-like programs that call Pi tools. Host calls retain Pi's validation, permission/result hooks, and nested-call audit; cancellation waits for host cleanup, and output keeps bounded, visible diagnostics.
 
-This is not a claim that OpenCode is faster or safer than native `codemode`. There is no comparative benchmark here. Both can batch tool calls; the reason to install this extension is to use the OpenCode interpreter in Pi without replacing the native tool. You choose the tool: preflight can reject an unsuitable OpenCode program, but never switches tools or falls back automatically.
+Short programs can be quick: see the [benchmark snapshot](#benchmark-snapshot) for measured comparisons with native `codemode`. Both can batch tool calls; this extension lets you use the OpenCode interpreter in Pi without replacing the native tool. Performance depends on the workload, and lower latency does not imply stronger isolation. You choose the tool: preflight can reject an unsuitable OpenCode program, but never switches tools or falls back automatically.
+
+## At a glance
+
+Illustrative transcript (not a terminal capture):
+
+```text
+You: Call codemode_o with {"code":"return 42;"}.
+
+codemode_o (OpenCode)
+return 42;
+
+42
+Took 0.0s
+```
+
+Native `codemode` remains available alongside it. This extension adds an
+interpreter choice, not an OpenCode server or a replacement Pi CLI.
 
 ## Quick start
 
-Requires **Node.js >= 22.19**, npm, Git, and an installed Pi CLI with a configured model/provider. Check `node --version` and `pi --version`; if you are new to Pi, see its [quickstart](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/quickstart.md). In Pi, `/login` configures a provider and `/model` chooses a model. The extension does not need an OpenCode account or server; asking Pi to call it still uses your configured model.
+Requires **Node.js >= 22.19.0**, npm, Git, and **Pi >= 0.99.0, < 2.0.0** with a configured model/provider. Check `node --version` and `pi --version`; if you are new to Pi, see its [quickstart](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/quickstart.md). In Pi, `/login` configures a provider and `/model` chooses a model. The extension does not need an OpenCode account or server; asking Pi to call it still uses your configured model.
 
-1. **Install this checkout's dependencies.** The package is currently private; use a local checkout rather than an npm package name.
+1. **Install from source.** This checkout workflow does not depend on npm publication. Until the repository is public, cloning requires repository access.
 
    ```sh
    git clone https://github.com/hyein-cbio/pi-opencode-mode.git
@@ -39,6 +56,62 @@ Requires **Node.js >= 22.19**, npm, Git, and an installed Pi CLI with a configur
 4. **Check the actual tool result.** The transcript should contain a **`codemode_o (OpenCode)`** tool row, result **`42`**, and a concise `Took …` footer in the TUI. An assistant merely saying “42” is not proof the extension ran. Pi's editor is a chat interface, not a JavaScript REPL.
 
 If the tool is missing, check startup load errors and the absolute `-e` path, run `npm ci` in the checkout, and restart with the explicit tool list above. An `UnknownTool` for a guest call means that host tool is not callable in that session; inspect the catalog below. `NativeCodemodeRequired` means the source did **not** run—use native `codemode` for it. Never automatically replay a program after an execution failure: host effects may already have occurred.
+
+## Benchmark snapshot
+
+**18.1× faster on the small-program control, 14.1× on read/reduce, and 3.7× on
+parallel context collection** in a recorded
+[pi-codemode-bench](https://github.com/hyein-cbio/pi-codemode-bench) run.
+These are ratios of native Pi to `codemode_o` **median tool latency**, not
+end-to-end assistant speedups; ratios use the unrounded source measurements.
+
+The table below copies the benchmark's preselected ten-case cross-section,
+including a CPU-heavy case where native Pi wins. Values are **median / p95 in
+milliseconds** (lower is better).
+
+| Case | Native Pi `codemode` median / p95 (ms) | `codemode_o` median / p95 (ms) |
+|---|---:|---:|
+| even-squares-10 | 10.158 / 10.803 | 0.561 / 0.803 |
+| read-reduce | 9.904 / 11.376 | 0.705 / 1.668 |
+| parallel-context | 12.594 / 13.592 | 3.381 / 3.522 |
+| cursor-pagination | 10.791 / 13.036 | 1.243 / 2.720 |
+| retry-waves | 18.499 / 20.513 | 9.010 / 9.636 |
+| fan-in-dag-64 | 21.785 / 24.801 | 12.998 / 14.053 |
+| deep-roundtrip-64 | 15.870 / 16.301 | 7.264 / 7.659 |
+| arithmetic-100000 | 12.807 / 13.660 | 203.832 / 212.545 |
+| json-records-8k-x1 | 10.111 / 11.203 | 2.904 / 3.988 |
+| json-strings-48k-x4 | 10.698 / 10.901 | 8.573 / 11.366 |
+
+### What was measured
+
+- **2026-10-22**, Apple M5 Pro, macOS arm64, Node **26.12.1**; Pi SDK **1.0.0**
+  for both actual registered tools, not direct-runtime substitutes. Native Pi
+  here means its built-in QuickJS `codemode`, not the separate Luau project.
+- `pi-opencode-mode` **0.0.1** at revision
+  [`53b9dd9`](https://github.com/hyein-cbio/pi-opencode-mode/tree/53b9dd937ad53cd3558b086ab21e812780524d5a),
+  OpenCode CodeMode **2.1.0**, Effect **4.0.1**. This is a **historical snapshot,
+  not a fresh measurement of 0.1.0**; later code changes have not been remeasured
+  in this table.
+- **20 warm samples**, 4 warmups, and one first-invocation control per eligible
+  case/tool. p95 is nearest-rank. The clock spans root tool execution, including
+  guest runtime and bridge work, but excludes session setup, extension loading,
+  and model generation. Host tools are synthetic in-memory fixtures.
+- Full corpus: **76 cases, 3,675 executions, 0 invalid**, including **75
+  expected-error checks**. Five unsupported `codemode_o` cells remain visible:
+  two 128-call cases, classes, depth-40 JSON, and per-call deadlines. Unsupported
+  cells and expected errors are **not speed wins**.
+
+Short orchestration looked good in this run; tight CPU loops did not. This is
+one host and one run, without confidence intervals or production-workload
+weights—not a universal ranking, stronger-security claim, or automatic routing
+rule. Different runtime limits still apply.
+
+Source snapshot (commit-pinned):
+[all 76 cases](https://github.com/hyein-cbio/pi-codemode-bench/blob/0eb3afa24279a50b6aa8da7da44cd7ebcd6a28d6/benchmarks/results/pi-comparison.json.md)
+· [every timing sample and source hash](https://github.com/hyein-cbio/pi-codemode-bench/blob/0eb3afa24279a50b6aa8da7da44cd7ebcd6a28d6/benchmarks/results/pi-comparison.json)
+· [protocol and provenance](https://github.com/hyein-cbio/pi-codemode-bench/blob/0eb3afa24279a50b6aa8da7da44cd7ebcd6a28d6/benchmarks/README.md).
+The source hashes identify the measured implementation; the recorded benchmark
+HEAD alone does not, because that measurement used a dirty benchmark checkout.
 
 ## When to choose which tool
 
@@ -99,7 +172,7 @@ Pass the returned `next.offset` as `offset` in another `search({ query: "", limi
 - Native Pi `codemode` is **model-only**, so this extension cannot invoke it through `ctx.executeTool`. When preflight selects native, `codemode_o` returns `NativeCodemodeRequired` **before constructing the runtime or calling any host tool**. The caller must invoke the active built-in `codemode` itself, using its raw-source input contract. If it is disabled, enable it first. No tool name rewriting or permission bypass is used.
 - Results include the preflight decision in `details.route`. Once OpenCode execution starts, any failure stays an OpenCode failure: **no automatic fallback, retry, or replay**, since host tools may already have produced effects.
 
-`@earendil-works/pi-coding-agent` >= 0.99.0 is the declared peer dependency. 0.99.0 is the first release whose tool context can call other tools and whose built-in `codemode` exists. The older loader probes are not full session compatibility tests; the lifecycle regressions below have been verified with actual Pi SDK **1.3.0 and 1.4.0** sessions, not every version in the peer range.
+The supported Pi range is **>= 0.99.0, < 2.0.0**, with matching Pi/TUI versions. Pi 0.99.0 introduced the callable-tool context and native `codemode` required by this extension. CI checks **0.99.0** (minimum), **1.3.0**, and **1.4.0** on Node **22.19.0** and **24.x**, running both the unit suite and isolated real-SDK sessions. The CI matrix is a set of regression baselines, not the complete list of supported versions; intermediate releases are not individually certified.
 
 ## Execution and output contract
 
@@ -144,4 +217,13 @@ PI_OPENCODE_SDK=/path/to/node_modules/@earendil-works/pi-coding-agent npm test
 
 Real-session tests use disposable directories, in-memory history/settings, scripted assistant streams, disabled model-network discovery, and safe in-memory stubs only. No personal resources, real model calls, or real mutation tools are used.
 
-`npm run test:pi-versions` is a separate, **network/install-enabled** historical loader/mock-context matrix; run it only deliberately. It is not proof of full session compatibility. See [TESTING.md](TESTING.md) for before/after evidence and scope.
+`npm run test:pi-versions` is a separate, **network/install-enabled** compatibility matrix. It installs dependencies into disposable copies and runs the full suite, including real-SDK sessions, against Pi 0.99.0, 1.3.0, and 1.4.0. See [TESTING.md](TESTING.md) for reproduction commands and coverage limits.
+
+## Project information
+
+- [Changes and 0.1.0 release notes](CHANGELOG.md)
+- [Security policy and private reporting](SECURITY.md)
+- [Bug reports and feature requests](https://github.com/hyein-cbio/pi-opencode-mode/issues)
+
+Please include the extension, Pi, and Node versions in bug reports. Do not put
+credentials, private tool results, or vulnerability details in public issues.

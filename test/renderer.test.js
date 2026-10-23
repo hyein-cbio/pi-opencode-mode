@@ -63,18 +63,19 @@ test("collapsed source and output cap visual lines, including long Unicode JSON"
   assert.deepEqual(value, snapshot, "rendering never alters model-visible output");
 });
 
-test("ordinary result layout matches native codemode with the same output and duration", () => {
+test("ordinary and expanded output matches native codemode without optional timing", () => {
   let native;
   // Capture public factory registration only; never execute native QuickJS or touch settings.
   createCodemodeExtension()({ registerTool(value) { native = value; } });
-  for (const expanded of [false, true]) {
-    for (const text of ["42", '"한😀"'.repeat(100)]) {
-      const options = { expanded, isPartial: false };
-      const ctx = context({ durationMs: 1234, expanded });
-      const expected = lines(native.renderResult(result(text), options, theme, ctx), 40);
-      const actual = lines(tool().renderResult(result(text), options, theme, ctx), 40);
-      assert.deepEqual(actual, expected);
-    }
+  // Older native renderers have neither a timer nor visual-line collapse.
+  // Compare the shared output contract; separate tests verify our footer and
+  // collapsed Unicode previews rather than imposing newer native UI on old Pi.
+  for (const [expanded, text] of [[false, "42"], [true, "42"], [true, '"한😀"'.repeat(100)]]) {
+    const options = { expanded, isPartial: false };
+    const ctx = context({ expanded });
+    const expected = lines(native.renderResult(result(text), options, theme, ctx), 40);
+    const actual = lines(tool().renderResult(result(text), options, theme, ctx), 40);
+    assert.deepEqual(actual, expected);
   }
 });
 
