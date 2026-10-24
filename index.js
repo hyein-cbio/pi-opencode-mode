@@ -1,7 +1,7 @@
 import { CodeMode, Tool, toolError } from "@opencode/codemode";
 import { Effect } from "effect";
 import { Type } from "typebox";
-import { ROUTE_LIMITS, selectCodemodeRoute } from "./route.js";
+import { PREFLIGHT_LIMITS, checkOpenCodeCompatibility } from "./route.js";
 import { openCodeRenderers } from "./renderer.js";
 
 const TOOL_NAME = "codemode_o";
@@ -9,9 +9,9 @@ const TOOL_NAME = "codemode_o";
 const HIDDEN_FROM_GUEST = new Set(["codemode", TOOL_NAME]);
 const LIMITS = { timeoutMs: 30_000, maxToolCalls: 64, maxOutputBytes: 65_536 };
 const BASE = [
-  "Confined OpenCode CodeMode v2, not Pi's QuickJS codemode.",
+  "Confined OpenCode CodeMode v2, not Pi's QuickJS codemode. Prefer codemode_o for short, self-contained programs known to fit its supported syntax and limits.",
   "Write a JavaScript-like program. Use return, or a final expression. undefined becomes null.",
-  `Only short supported programs (at most ${ROUTE_LIMITS.maxSourceBytes} UTF-8 source bytes and ${ROUTE_LIMITS.maxLines} lines) run here. Use Pi codemode for longer/uncertain syntax, @options, text/image/exit, store/load, discovery globals, or models. Native-required programs are rejected BEFORE execution; call codemode yourself, never replay after an execution failure.`,
+  `Only short supported programs (at most ${PREFLIGHT_LIMITS.maxSourceBytes} UTF-8 source bytes and ${PREFLIGHT_LIMITS.maxLines} lines) run here. Choose active native Pi codemode upfront for longer/uncertain syntax, long-running work, @options, text/image/exit, store/load, discovery globals, models, image workflows, or MCP tools (readiness is not coordinated here). Native-required programs are rejected BEFORE execution; invoke native codemode directly only if active, otherwise report that it is needed. Never automatically replay after an execution failure.`,
   "Call pi tools that are already callable as await tools.<name>({ ... }).",
   'Inspect unfamiliar tool arguments with synchronous search({ query: "tools.read", limit: 1 }). It returns items with path, description, and signature, plus remaining and next for pagination. This OpenCode global only lists already-callable tools, does not activate tools, and counts toward the tool-call limit.',
   "No import, process, require, eval, Function, filesystem, network, or timers except through those tools.",
@@ -149,7 +149,9 @@ export function createOpenCodeModeExtension() {
       description: BASE,
       promptSnippet: "Run confined OpenCode CodeMode that calls other pi tools",
       promptGuidelines: [
-        "Choose codemode_o only for short OpenCode-subset programs. Otherwise use Pi's unchanged codemode, especially for Pi globals, options, models, or uncertain syntax. A NativeCodemodeRequired result means no source ran; there is no automatic delegation or replay.",
+        "Choose from task context. Prefer codemode_o for short, self-contained programs within its syntax/limits. Call either tool directly (model-only).",
+        "Use native codemode upfront for Pi globals/@options/models, images, MCP (readiness), long-running work, or uncertain compatibility.",
+        "Preflight validates, never routes. NativeCodemodeRequired means no source ran: use native if active, otherwise report it is needed. Never automatically replay execution failures; effects are not rolled back.",
       ],
       parameters: Type.Object({
         code: Type.String({ description: "OpenCode CodeMode source." }),
@@ -167,18 +169,23 @@ export function createOpenCodeModeExtension() {
       async execute(_toolCallId, params, signal, _onUpdate, ctx) {
         const startedAt = performance.now();
         const code = typeof params?.code === "string" ? params.code : "";
-        const route = selectCodemodeRoute({ requested: TOOL_NAME, code });
-        const routed = (result) => ({
-          ...result,
-          details: { ...result.details, route, durationMs: performance.now() - startedAt },
+        const preflight = checkOpenCodeCompatibility(code);
+        // Legacy metadata only, not a dispatch decision. No native tool is executed here.
+        const route = Object.freeze({
+          decision: "selected", route: preflight.supported ? TOOL_NAME : "codemode",
+          reasons: preflight.reasons, executesSource: false,
         });
-        if (route.route !== TOOL_NAME) {
+        const finish = (result) => ({
+          ...result,
+          details: { ...result.details, preflight, route, durationMs: performance.now() - startedAt },
+        });
+        if (!preflight.supported) {
           // Built-in codemode is model-only: do not bypass Pi's invocation boundary.
-          return routed(renderResult({
+          return finish(renderResult({
             ok: false,
             error: {
               kind: "NativeCodemodeRequired",
-              message: `Source was not executed (${route.reasons.join(", ")}). Use Pi's built-in codemode with this source. No automatic delegation or replay was attempted.`,
+              message: `Source was not executed (${preflight.reasons.join(", ")}). Use Pi's built-in codemode with this source if active; otherwise report that native codemode is needed. No automatic delegation or replay was attempted.`,
             },
             toolCalls: [],
           }));
@@ -186,9 +193,9 @@ export function createOpenCodeModeExtension() {
         try {
           const runtime = CodeMode.make({ tools: codeModeTools(ctx, signal), limits: LIMITS });
           const result = await Effect.runPromise(runtime.execute(code), signal ? { signal } : undefined);
-          return routed(renderResult(result));
+          return finish(renderResult(result));
         } catch (error) {
-          return routed(renderResult({
+          return finish(renderResult({
             ok: false,
             error: { kind: "ExecutionFailure", message: signal?.aborted ? "Script interrupted" : message(error) },
             toolCalls: [],

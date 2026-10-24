@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Security fixes target the latest released version, currently **0.1.0**.
+Security fixes target the latest released version, currently **0.1.1**.
 See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## Reporting a vulnerability
@@ -29,7 +29,7 @@ best-effort; this project has no guaranteed security-response SLA.
 - Guest programs can invoke the tools already callable in their session, through
   Pi's validation and permission/result hooks. Review the tools you enable.
 - The OpenCode interpreter is **not** an OS sandbox or memory-isolation boundary.
-  Routing limits are compatibility checks, not an authorization boundary.
+  Preflight limits only check compatibility; they do not choose tools or authorize calls.
 - Cancellation is cooperative, and cannot undo completed side effects. A host
   tool that never settles can prevent result delivery beyond the nominal deadline.
 - Text-output limits do not bound host allocations, the complete transcript, or

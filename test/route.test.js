@@ -1,11 +1,33 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ROUTE_LIMITS, ROUTE_TOOLS, selectCodemodeRoute } from "../route.js";
+import { PREFLIGHT_LIMITS, ROUTE_LIMITS, ROUTE_TOOLS, checkOpenCodeCompatibility, selectCodemodeRoute } from "../route.js";
 import { createOpenCodeModeExtension } from "../index.js";
 
-const select = (code, requested = "auto") => selectCodemodeRoute({ code, requested });
+const select = (code, requested = "auto") => {
+  const result = selectCodemodeRoute({ code, requested });
+  if (requested === "auto" || requested === "codemode_o") {
+    const preflight = checkOpenCodeCompatibility(code);
+    assert.equal(preflight.supported, result.route === "codemode_o");
+    assert.deepEqual(preflight.reasons, result.reasons);
+    assert.equal(preflight.executesSource, false);
+    assert.equal("route" in preflight, false, "compatibility checking does not choose a tool");
+  }
+  return result;
+};
 
-test("selects short OpenCode programs without executing source", () => {
+test("compatibility preflight has no tool choice; historical advisory remains compatible", () => {
+  assert.equal(PREFLIGHT_LIMITS, ROUTE_LIMITS);
+  const accepted = checkOpenCodeCompatibility("return 42;");
+  assert.deepEqual(accepted, { supported: true, reasons: ["short-opencode-subset"], executesSource: false });
+  assert.ok(Object.isFrozen(accepted));
+  assert.ok(Object.isFrozen(accepted.reasons));
+  const rejected = checkOpenCodeCompatibility("text(42);");
+  assert.deepEqual(rejected, { supported: false, reasons: ["native-name:text"], executesSource: false });
+  assert.ok(Object.isFrozen(rejected));
+  assert.ok(Object.isFrozen(rejected.reasons));
+  // These preferences depend on task context, not static dispatch. No source runs.
+  assert.equal(checkOpenCodeCompatibility("return await tools.mcp__safe__read({});").supported, true);
+  assert.equal(checkOpenCodeCompatibility("let n = 0; for (let i = 0; i < 1000000; i++) n += i; return n;").supported, true);
   assert.deepEqual(ROUTE_TOOLS, ["codemode", "codemode_o"]);
   const result = select('const data = await tools.read({ path: "README.md" }); return data.length;');
   assert.deepEqual(result, {
@@ -72,7 +94,7 @@ test("source size, lines and AST depth have deterministic conservative limits", 
   assert.equal(select(array(ROUTE_LIMITS.maxNodes - 2)).route, "codemode");
 });
 
-test("execution rejects native routes before accessing tools; no delegation or replay", async () => {
+test("execution only rejects incompatible source before accessing tools; no delegation or replay", async () => {
   let tool;
   createOpenCodeModeExtension()({ registerTool(value) { tool = value; } });
   let touched = false;
@@ -83,14 +105,16 @@ test("execution rejects native routes before accessing tools; no delegation or r
   const result = await tool.execute("route", { code: 'await tools.write({}); text("done");' }, undefined, undefined, ctx);
   assert.equal(touched, false);
   assert.equal(result.isError, true);
-  assert.equal(result.details.route.route, "codemode");
+  assert.equal(result.details.route.route, "codemode"); // Legacy metadata, not dispatch.
+  assert.equal(result.details.preflight.supported, false);
+  assert.equal("route" in result.details.preflight, false);
   assert.equal(result.details.error.kind, "NativeCodemodeRequired");
   assert.deepEqual(result.details.toolCalls, []);
   assert.match(result.content[0].text, /not executed/i);
   assert.match(result.content[0].text, /codemode/);
 });
 
-test("successful OpenCode results expose the selected route; failures never replay", async () => {
+test("OpenCode results expose compatibility outcome; execution failures never replay", async () => {
   let tool;
   createOpenCodeModeExtension()({ registerTool(value) { tool = value; } });
   let calls = 0;
@@ -100,8 +124,10 @@ test("successful OpenCode results expose the selected route; failures never repl
   };
   const success = await tool.execute("ok", { code: "return 42;" }, undefined, undefined, ctx);
   assert.equal(success.details.route.route, "codemode_o");
+  assert.equal(success.details.preflight.supported, true);
   const failure = await tool.execute("fail", { code: 'await tools.write({}); throw new Error("stop");' }, undefined, undefined, ctx);
   assert.equal(failure.isError, true);
   assert.equal(calls, 1);
   assert.equal(failure.details.route.route, "codemode_o");
+  assert.equal(failure.details.preflight.supported, true);
 });

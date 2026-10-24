@@ -24,7 +24,7 @@ npm test
 
 After dependencies are installed, the tests do not install SDKs or use model
 APIs. Without `PI_OPENCODE_SDK`, the session suite explicitly skips: the current
-result is **41 passed, 1 skipped**. The boundary tests include literal 30-second
+result is **42 passed, 1 skipped**. The boundary tests include literal 30-second
 timeout and delayed-cleanup probes, so the suite takes at least 30 seconds.
 
 ## Full suite with an existing SDK
@@ -35,14 +35,14 @@ To use the SDK installed by `npm ci`:
 PI_OPENCODE_SDK="$PWD/node_modules/@earendil-works/pi-coding-agent" npm test
 ```
 
-Expected result: **49 passed, 0 skipped**, including the SDK suite's parent and
-seven subtests. To run only the session suite:
+Expected result: **51 passed, 0 skipped**, including the SDK suite's parent and
+eight subtests. To run only the session suite:
 
 ```sh
 PI_OPENCODE_SDK="$PWD/node_modules/@earendil-works/pi-coding-agent" node --test test/session.test.js
 ```
 
-Expected result: **8 passed, 0 skipped**. You can also supply an absolute path to
+Expected result: **9 passed, 0 skipped**. You can also supply an absolute path to
 another installed SDK package directory. For an exact dependency-version test,
 use the clean-copy matrix below rather than mixing a local host installation
 with another SDK directory.
@@ -93,12 +93,31 @@ These are local results, not a claim that hosted CI has already run. The new
 workflow runs on Ubuntu after it is pushed. The Node 24.x job follows the latest
 24.x patch, while the minimum Node version is pinned exactly.
 
+## 0.1.1 release verification — 2026-10-24
+
+On macOS with Node **26.12.1**, the clean-copy matrix passed the full suite
+without skips against Pi **0.99.0**, **1.3.0**, and **1.4.0**. The GitHub CI
+matrix separately gates Node **22.19.0 / 24.x** before publication.
+
+`npm audit --omit=peer` reports **0 vulnerabilities** for the non-peer dependency
+tree. Full `npm audit` reports **1 moderate / 1 high** dependency entry from the
+locked test host Pi **1.3.0** and its exact **undici 8.10.2** dependency. Those
+host packages are not bundled in this extension's tarball; managed Pi installs
+supply them. This release does not override or downgrade the host to suppress
+those advisories. Keep the host installation updated independently.
+
 ## Coverage
 
 - Fresh execution and bridge behavior: structured/text returns, error handling,
   unsupported multimodal results, and exclusion of both code tools from guests.
-- Static routing: Pi-only globals/options, supported syntax, source/AST limits,
-  preflight rejection before any host effect, and no automatic replay.
+- Model guidance: conditional OpenCode preference and native-first exceptions;
+  real-SDK default prompt inclusion only while declared and active, no duplicate
+  guidelines on repeated activation, and no guidance when the extension is absent.
+  Native-inactive loadouts retain the explicit availability caveat.
+- Compatibility-only preflight: Pi-only globals/options, supported syntax,
+  source/AST limits, rejection before any host effect, and no automatic replay.
+  Tool selection is explicitly assigned to the LLM context; the legacy advisory
+  API is preserved but is not called by the extension execution path.
 - Lifecycle: early return, race losers, user abort, literal deadline, and awaited
   cooperative host cleanup, including Pi hooks and completed nested-call audits.
 - Output: final UTF-8/JSON-escaping bounds, Unicode, logs, huge errors, visible

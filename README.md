@@ -20,7 +20,7 @@ return 42;
 Took 0.0s
 ```
 
-Native `codemode` remains available alongside it. This extension adds an
+Native `codemode` is left unchanged and can be active alongside it. This extension adds an
 interpreter choice, not an OpenCode server or a replacement Pi CLI.
 
 ## Install
@@ -28,13 +28,13 @@ interpreter choice, not an OpenCode server or a replacement Pi CLI.
 Install the versioned npm package in Pi:
 
 ```sh
-pi install npm:pi-opencode-mode@0.1.0
+pi install npm:pi-opencode-mode@0.1.1
 ```
 
 Or install the tagged Git source:
 
 ```sh
-pi install git:github.com/hyein-cbio/pi-opencode-mode@v0.1.0
+pi install git:github.com/hyein-cbio/pi-opencode-mode@v0.1.1
 ```
 
 Restart Pi after installation. To explicitly enable both code tools:
@@ -54,7 +54,7 @@ Requires **Node.js >= 22.19.0**, npm, Git, and **Pi >= 0.99.0, < 2.0.0** with a 
 1. **Install from source for the walkthrough.** Use the release tag so the examples match this version.
 
    ```sh
-   git clone --branch v0.1.0 https://github.com/hyein-cbio/pi-opencode-mode.git
+   git clone --branch v0.1.1 https://github.com/hyein-cbio/pi-opencode-mode.git
    cd pi-opencode-mode
    npm ci
    ```
@@ -79,7 +79,7 @@ Requires **Node.js >= 22.19.0**, npm, Git, and **Pi >= 0.99.0, < 2.0.0** with a 
 
 4. **Check the actual tool result.** The transcript should contain a **`codemode_o (OpenCode)`** tool row, result **`42`**, and a concise `Took …` footer in the TUI. An assistant merely saying “42” is not proof the extension ran. Pi's editor is a chat interface, not a JavaScript REPL.
 
-If the tool is missing, check startup load errors and the absolute `-e` path, run `npm ci` in the checkout, and restart with the explicit tool list above. An `UnknownTool` for a guest call means that host tool is not callable in that session; inspect the catalog below. `NativeCodemodeRequired` means the source did **not** run—use native `codemode` for it. Never automatically replay a program after an execution failure: host effects may already have occurred.
+If the tool is missing, check startup load errors and the absolute `-e` path, run `npm ci` in the checkout, and restart with the explicit tool list above. An `UnknownTool` for a guest call means that host tool is not callable in that session; inspect the catalog below. `NativeCodemodeRequired` means the source did **not** run—invoke native `codemode` directly if active; otherwise report that it is needed. Never automatically replay a program after an execution failure: host effects may already have occurred.
 
 ## Benchmark snapshot
 
@@ -114,7 +114,7 @@ milliseconds** (lower is better).
 - `pi-opencode-mode` **0.0.1** at revision
   [`53b9dd9`](https://github.com/hyein-cbio/pi-opencode-mode/tree/53b9dd937ad53cd3558b086ab21e812780524d5a),
   OpenCode CodeMode **2.1.0**, Effect **4.0.1**. This is a **historical snapshot,
-  not a fresh measurement of 0.1.0**; later code changes have not been remeasured
+  not a fresh measurement of 0.1.1**; later code changes have not been remeasured
   in this table.
 - **20 warm samples**, 4 warmups, and one first-invocation control per eligible
   case/tool. p95 is nearest-rank. The clock spans root tool execution, including
@@ -139,14 +139,20 @@ HEAD alone does not, because that measurement used a dirty benchmark checkout.
 
 ## When to choose which tool
 
-Choose `codemode_o` when you already work with OpenCode CodeMode and want to reuse a short program's control flow in Pi, adapting host-tool names and arguments to the current catalog. It gives you the same interpreter family and `search(...)` interface, while Pi-native workflows can keep using `codemode`. Programs still have to fit this extension's supported subset and limits.
+Prefer `codemode_o` over native `codemode` for short, self-contained programs known to fit its supported syntax and limits. This includes batching already-callable non-MCP tools and returning compact text or JSON. You can also reuse short OpenCode programs, adapting host-tool names and arguments to Pi's current catalog.
+
+The extension supplies this conditional preference through the registered tool's `promptGuidelines`, which Pi adds to the default system prompt while `codemode_o` is active and declared. No `AGENTS.md` edit or whole-system-prompt replacement is needed. This is model guidance, not a forced router or a performance guarantee; higher-priority instructions and custom system prompts may affect it. It does not activate tools, replace native `codemode`, or change other extensions. In particular, it does not guarantee extra edit/write diff presentation from other extensions.
 
 | Need | Choose |
 | --- | --- |
-| Deliberately use the OpenCode interpreter for a short, fresh program that awaits tools and returns JSON | `codemode_o` |
-| Batch independent tool calls or summarize results before the model sees them | Either; this is not an OpenCode-only advantage |
+| Short, fresh program with known supported syntax that awaits already-callable non-MCP tools and returns text/JSON | Prefer `codemode_o` |
+| Batch independent non-MCP tool calls or summarize results within those limits | Prefer `codemode_o`; native can also do this |
 | Pi's `text()`, `image()`, `exit()`, `store()`/`load()`, `models`, or native discovery helpers | Native `codemode` |
-| Longer programs, broader JavaScript syntax, or Pi's `// @options:` controls | Native `codemode` |
+| Longer or long-running programs, broader/uncertain syntax or limits, or Pi's `// @options:` controls | Native `codemode` upfront |
+| Image/screenshot display or generation | Native `codemode` (structured GUI data alone is not excluded) |
+| MCP discovery/calls, especially during startup or reconnect | Prefer native `codemode`; `codemode_o` does not coordinate MCP readiness |
+
+Choose native upfront for incompatible work; do not always try `codemode_o` first. Invoke native only when active; if unavailable, report that it is needed. `NativeCodemodeRequired` is a pre-execution rejection, not an execution failure. After execution fails, never automatically replay: host effects may already have occurred. Both code tools are model-only and must be called directly, not as `tools.codemode_o` or `tools.codemode` inside a script.
 
 For example, ask Pi to run this source with `codemode_o` to inspect the package and locate its tests in parallel, returning only a small overview:
 
@@ -186,21 +192,25 @@ Pass the returned `next.offset` as `offset` in another `search({ query: "", limi
 
 `search` does not invoke the listed host tools, requires no `await`, and counts toward the **64-call** budget. It only sees tools **already callable in this session**; it does not install, activate, or bypass permissions for tools. `codemode` and `codemode_o` are excluded from the guest catalog. Unlike Pi's native `searchTools()`/`describeTool()` helpers, this global is named `search` and takes an options object. Input signatures come from host schemas; output signatures may be generic (`Promise<unknown>`) and do not prove a return value's shape. Consult the tool's description and the bridge contract below as well.
 
-## Routing
+## Context-based tool selection and compatibility checks
 
-`selectCodemodeRoute({ code, requested: "auto" })` returns an immutable `{ decision, route, reasons, executesSource: false }` without evaluating source. An explicit `requested: "codemode"` always stays native. `requested: "codemode_o"` still requires preflight approval.
+**The LLM chooses the tool before calling it**, using the task and the extension-provided context guidelines above. There is no code-based dispatcher, automatic delegation, or try-OpenCode-first policy. Performance, MCP readiness, image needs, and other task-level considerations belong to that contextual choice—not an AST classifier.
 
-- OpenCode candidates are at most **8,192 UTF-8 source bytes**, **100 lines**, **2,000 AST nodes**, and **64 AST levels**. Acorn parses source without executing it; a conservative syntax allowlist rejects unknown syntax.
-- Pi globals (`text`, `image`, `exit`, `store`, `load`, `ALL_TOOLS`, `searchTools`, `describeTool`, `describeNamespace`, `models`), options comments (`@options:`), classes, regex/BigInt literals, generators, accessors, and uncertain constructors stay native. Only standard error constructors are admitted. Comments, strings, and ordinary property names do not count as global references; shadowed Pi names conservatively stay native.
-- This is a compatibility heuristic, **not** a full JavaScript semantic validator, cost estimator, or security boundary. Tool availability, values, built-in methods, runtime failures, and actual running time cannot be proven statically. Native selection does not guarantee that native Pi supports the program either.
-- Native Pi `codemode` is **model-only**, so this extension cannot invoke it through `ctx.executeTool`. When preflight selects native, `codemode_o` returns `NativeCodemodeRequired` **before constructing the runtime or calling any host tool**. The caller must invoke the active built-in `codemode` itself, using its raw-source input contract. If it is disabled, enable it first. No tool name rewriting or permission bypass is used.
-- Results include the preflight decision in `details.route`. Once OpenCode execution starts, any failure stays an OpenCode failure: **no automatic fallback, retry, or replay**, since host tools may already have produced effects.
+After the LLM explicitly calls `codemode_o`, `checkOpenCodeCompatibility(code)` only accepts or rejects that source, returning immutable `{ supported, reasons, executesSource: false }`. It never selects or invokes another tool. Keep this pre-execution guard: a mistaken choice must not run partially before discovering an unsupported construct.
+
+The historical `selectCodemodeRoute` helper and `ROUTE_LIMITS` alias remain for API compatibility only; the extension does not call that helper. Its `requested: "auto"` result is a legacy static advisory, not the tool-selection policy.
+
+- OpenCode candidates are at most **8,192 UTF-8 source bytes**, **100 lines**, **2,000 AST nodes**, and **64 AST levels**. Acorn parses source without executing it; a conservative compatibility allowlist rejects unknown syntax.
+- Pi globals (`text`, `image`, `exit`, `store`, `load`, `ALL_TOOLS`, `searchTools`, `describeTool`, `describeNamespace`, `models`), options comments (`@options:`), classes, regex/BigInt literals, generators, accessors, and uncertain constructors are rejected by the OpenCode preflight. Only standard error constructors are admitted. Comments, strings, and ordinary property names do not count as global references; shadowed Pi names conservatively stay native.
+- This is a compatibility guard, **not** a tool selector, full JavaScript semantic validator, cost estimator, or security boundary. Tool availability, values, built-in methods, runtime failures, and actual running time cannot be proven statically. Rejection does not guarantee that native Pi supports the program either.
+- Native Pi `codemode` is **model-only**, so this extension cannot invoke it through `ctx.executeTool`. When preflight rejects the source, `codemode_o` returns `NativeCodemodeRequired` **before constructing the runtime or calling any host tool**. The caller must invoke the active built-in `codemode` itself, using its raw-source input contract. If it is disabled, report that native `codemode` is needed; this extension does not enable it. No tool name rewriting or permission bypass is used.
+- Results include the compatibility outcome in `details.preflight`. `details.route` is retained as legacy metadata, not an executed dispatch or a guarantee that native is available. Once OpenCode execution starts, any failure stays an OpenCode failure: **no automatic fallback, retry, or replay**, since host tools may already have produced effects.
 
 The supported Pi range is **>= 0.99.0, < 2.0.0**, with matching Pi/TUI versions. Pi 0.99.0 introduced the callable-tool context and native `codemode` required by this extension. CI checks **0.99.0** (minimum), **1.3.0**, and **1.4.0** on Node **22.19.0** and **24.x**, running both the unit suite and isolated real-SDK sessions. The CI matrix is a set of regression baselines, not the complete list of supported versions; intermediate releases are not individually certified.
 
 ## Execution and output contract
 
-- Each preflight-approved call creates a fresh OpenCode runtime: interruption after **30,000 ms**, at most **64 tool calls**. Static routing runs first; no automatic fallback or replay. Pi's built-in `codemode` stays unchanged, and neither code tool is callable from the guest.
+- Each preflight-approved call creates a fresh OpenCode runtime: interruption after **30,000 ms**, at most **64 tool calls**. Compatibility checking runs first; no automatic fallback or replay. Pi's built-in `codemode` stays unchanged, and neither code tool is callable from the guest.
 - All host calls use `ctx.executeTool`, preserving Pi's validation, permission/result hooks, and nested-call audit. The host receives both outer user cancellation and Effect interruption (including early return and race-loser cleanup at program completion). Host promises are drained before the root result is delivered, including asynchronous cleanup and hooks.
 - Cancellation is cooperative, not rollback. A host tool that ignores its signal can still perform effects; one that never settles can prevent result delivery indefinitely. The 30-second deadline requests interruption, **not a hard wall-clock return guarantee**. Await your work and use only trusted, cancellation-aware tools. This interpreter is not an OS or memory-isolation sandbox and does not implement all JavaScript semantics.
 - **65,536 UTF-8 bytes** bounds the extension's final `content` text, after JSON encoding, logs, error messages, warnings, separators, and truncation notices. It does not bound the entire Pi message/envelope, `details`, tool names/audit metadata, upstream allocations, or later output added by other extensions.
@@ -245,7 +255,7 @@ Real-session tests use disposable directories, in-memory history/settings, scrip
 
 ## Project information
 
-- [Changes and 0.1.0 release notes](CHANGELOG.md)
+- [Changes and 0.1.1 release notes](CHANGELOG.md)
 - [Security policy and private reporting](SECURITY.md)
 - [Bug reports and feature requests](https://github.com/hyein-cbio/pi-opencode-mode/issues)
 

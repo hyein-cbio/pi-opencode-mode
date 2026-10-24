@@ -1,11 +1,13 @@
 import { parse } from "acorn";
 
 export const ROUTE_TOOLS = Object.freeze(["codemode", "codemode_o"]);
-// Routing limits, not execution/output limits. Longer or uncertain programs stay native.
-export const ROUTE_LIMITS = Object.freeze({ maxSourceBytes: 8192, maxLines: 100, maxNodes: 2000, maxDepth: 64 });
+// Compatibility limits, not a tool-selection policy or execution/output limits.
+export const PREFLIGHT_LIMITS = Object.freeze({ maxSourceBytes: 8192, maxLines: 100, maxNodes: 2000, maxDepth: 64 });
+// Retained for consumers of the original pure helper.
+export const ROUTE_LIMITS = PREFLIGHT_LIMITS;
 
-// Intentionally narrower than the interpreter. Unknown/new syntax stays on Pi;
-// this is a static compatibility heuristic, not a semantic proof or authorization gate.
+// Intentionally narrower than the interpreter. Unknown/new syntax is rejected;
+// this is a static compatibility check, not routing, semantic proof, or authorization.
 const SYNTAX = new Set([
   "Program", "ExpressionStatement", "EmptyStatement", "BlockStatement", "ReturnStatement",
   "VariableDeclaration", "VariableDeclarator", "IfStatement", "ForStatement", "ForOfStatement",
@@ -35,17 +37,17 @@ function propertyName(node, parent, key) {
     (parent?.type === "Property" && key === "key" && !parent.computed && !parent.shorthand);
 }
 
-/** Pure preflight: never evaluates source, calls a tool, or retries a program. */
-export function selectCodemodeRoute({ code, requested = "auto" } = {}) {
-  const native = (reason) => selected("codemode", reason);
-  if (requested === "codemode") return native("native-requested");
-  if (requested !== "auto" && requested !== "codemode_o") return native("unknown-request");
-  if (typeof code !== "string") return native("empty-source");
-  if (code.length > ROUTE_LIMITS.maxSourceBytes || Buffer.byteLength(code, "utf8") > ROUTE_LIMITS.maxSourceBytes) {
-    return native("source-too-large");
+/** Checks only whether an already-selected codemode_o call may run. Never selects a tool. */
+export function checkOpenCodeCompatibility(code) {
+  const rejected = (reason) => Object.freeze({
+    supported: false, reasons: Object.freeze([reason]), executesSource: false,
+  });
+  if (typeof code !== "string") return rejected("empty-source");
+  if (code.length > PREFLIGHT_LIMITS.maxSourceBytes || Buffer.byteLength(code, "utf8") > PREFLIGHT_LIMITS.maxSourceBytes) {
+    return rejected("source-too-large");
   }
-  if (!code.trim()) return native("empty-source");
-  if (code.split(/\r\n|[\n\r\u2028\u2029]/u).length > ROUTE_LIMITS.maxLines) return native("too-many-lines");
+  if (!code.trim()) return rejected("empty-source");
+  if (code.split(/\r\n|[\n\r\u2028\u2029]/u).length > PREFLIGHT_LIMITS.maxLines) return rejected("too-many-lines");
 
   let ast;
   let options = false;
@@ -55,25 +57,25 @@ export function selectCodemodeRoute({ code, requested = "auto" } = {}) {
       onComment(_block, text) { if (/^\s*@options\s*:/u.test(text)) options = true; },
     });
   } catch {
-    return native("parse-uncertain");
+    return rejected("parse-uncertain");
   }
-  if (options) return native("pi-options");
-  if (!ast.body.some((node) => node.type !== "EmptyStatement")) return native("empty-source");
+  if (options) return rejected("pi-options");
+  if (!ast.body.some((node) => node.type !== "EmptyStatement")) return rejected("empty-source");
 
   const pending = [{ node: ast, depth: 0 }];
   let count = 0;
   while (pending.length) {
     const { node, parent, key, depth } = pending.pop();
-    if (++count > ROUTE_LIMITS.maxNodes || depth > ROUTE_LIMITS.maxDepth) return native("source-too-complex");
-    if (!SYNTAX.has(node.type)) return native(`unsupported-syntax:${node.type}`);
-    if (node.type === "Literal" && (node.regex || node.bigint !== undefined)) return native("unsupported-literal");
-    if (node.generator || (node.type === "Property" && node.kind !== "init")) return native("unsupported-function");
+    if (++count > PREFLIGHT_LIMITS.maxNodes || depth > PREFLIGHT_LIMITS.maxDepth) return rejected("source-too-complex");
+    if (!SYNTAX.has(node.type)) return rejected(`unsupported-syntax:${node.type}`);
+    if (node.type === "Literal" && (node.regex || node.bigint !== undefined)) return rejected("unsupported-literal");
+    if (node.generator || (node.type === "Property" && node.kind !== "init")) return rejected("unsupported-function");
     if (node.type === "NewExpression" && (node.callee.type !== "Identifier" || !CONSTRUCTORS.has(node.callee.name))) {
-      return native("uncertain-constructor");
+      return rejected("uncertain-constructor");
     }
-    // Even shadowed Pi names conservatively stay native. No fragile regex scan of source.
+    // Even shadowed Pi names are conservatively rejected. No fragile regex scan of source.
     if (node.type === "Identifier" && NATIVE_NAMES.has(node.name) && !propertyName(node, parent, key)) {
-      return native(`native-name:${node.name}`);
+      return rejected(`native-name:${node.name}`);
     }
     for (const [key, value] of Object.entries(node)) {
       const children = Array.isArray(value) ? value : [value];
@@ -84,5 +86,18 @@ export function selectCodemodeRoute({ code, requested = "auto" } = {}) {
       }
     }
   }
-  return selected("codemode_o", "short-opencode-subset");
+  return Object.freeze({
+    supported: true, reasons: Object.freeze(["short-opencode-subset"]), executesSource: false,
+  });
+}
+
+/**
+ * @deprecated Historical advisory API only; not used by the extension execution path.
+ * Tool selection belongs to the LLM's context, not this static compatibility check.
+ */
+export function selectCodemodeRoute({ code, requested = "auto" } = {}) {
+  if (requested === "codemode") return selected("codemode", "native-requested");
+  if (requested !== "auto" && requested !== "codemode_o") return selected("codemode", "unknown-request");
+  const result = checkOpenCodeCompatibility(code);
+  return selected(result.supported ? "codemode_o" : "codemode", result.reasons[0]);
 }

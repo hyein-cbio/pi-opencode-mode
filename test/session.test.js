@@ -28,7 +28,7 @@ test("isolated real Pi SDK session", { skip: !sdk && "set PI_OPENCODE_SDK to a l
     const resourceLoader = new pi.DefaultResourceLoader({
       cwd: dir, agentDir: dir, settingsManager,
       noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
-      systemPrompt: "Offline scripted test. In-memory safe stubs only.", additionalExtensionPaths: [],
+      additionalExtensionPaths: [],
       extensionFactories: [pi.createCodemodeExtension(), createOpenCodeModeExtension(), (api) => {
         const register = (name, parameters, execute) => api.registerTool({ name, label: name, description: "Safe in-memory test stub", parameters, execute });
         register("safe_echo", Type.Object({ value: Type.Number() }), async (_id, args) => {
@@ -78,6 +78,51 @@ test("isolated real Pi SDK session", { skip: !sdk && "set PI_OPENCODE_SDK to a l
     await session.bindExtensions({});
     assert.ok(session.getActiveToolNames().includes("codemode"), "builtin is still active");
     assert.ok(session.getActiveToolNames().includes("codemode_o"));
+    await t.test("default prompt follows active loadout without duplicate or unloaded guidance", async () => {
+      const definition = session.getAllTools().find((tool) => tool.name === "codemode_o");
+      const guidelines = definition.promptGuidelines;
+      assert.ok(guidelines.length > 0);
+      function checkGuidelines(count) {
+        for (const guideline of guidelines) {
+          assert.equal(session.systemPrompt.split(guideline).length - 1, count, guideline);
+        }
+      }
+      checkGuidelines(1);
+      for (let cycle = 0; cycle < 2; cycle++) {
+        session.setActiveToolsByName(names.filter((name) => name !== "codemode_o"));
+        checkGuidelines(0);
+        assert.ok(session.getActiveToolNames().includes("codemode"));
+        session.setActiveToolsByName(names);
+        checkGuidelines(1);
+      }
+      session.setActiveToolsByName(["codemode_o", "safe_echo"]);
+      checkGuidelines(1);
+      assert.ok(!session.getActiveToolNames().includes("codemode"));
+      assert.match(session.systemPrompt, /use native if active, otherwise report it is needed/);
+      session.setActiveToolsByName(names);
+
+      const unloadedLoader = new pi.DefaultResourceLoader({
+        cwd: dir, agentDir: dir, settingsManager,
+        noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
+        additionalExtensionPaths: [], extensionFactories: [pi.createCodemodeExtension()],
+      });
+      await unloadedLoader.reload();
+      assert.deepEqual(unloadedLoader.getExtensions().errors, []);
+      const { session: unloaded } = await pi.createAgentSession({
+        cwd: dir, agentDir: dir, model, thinkingLevel: "off", modelRuntime, settingsManager,
+        resourceLoader: unloadedLoader, sessionManager: pi.SessionManager.inMemory(dir), tools: ["codemode"],
+      });
+      try {
+        await unloaded.bindExtensions({});
+        assert.ok(!unloaded.getAllTools().some((tool) => tool.name === "codemode_o"));
+        for (const guideline of guidelines) assert.ok(!unloaded.systemPrompt.includes(guideline));
+        assert.ok(!unloaded.systemPrompt.includes("Prefer codemode_o"));
+      } finally {
+        await unloaded.abort();
+        await unloaded.extensionRunner.emit({ type: "session_shutdown" });
+        unloaded.dispose();
+      }
+    });
     let seq = 0;
     async function run(code, abort = false) {
       const id = `script-${++seq}`;

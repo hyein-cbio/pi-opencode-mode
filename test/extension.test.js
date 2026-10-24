@@ -30,6 +30,32 @@ test("package is one OpenCode-backed pi extension", () => {
   assert.equal(pkg.dependencies["@opencode/codemode"], "2.1.0");
 });
 
+test("registration supplies conditional preference without routing or prompt hooks", () => {
+  // This stub deliberately provides no lifecycle or activation APIs.
+  const tool = registeredTool();
+  const source = readFileSync(new URL("../index.js", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /\bselectCodemodeRoute\b/, "execution must not use the legacy selector");
+  const guidelines = tool.promptGuidelines.join("\n");
+  assert.ok(guidelines.length <= 600, "keep model guidance concise");
+  assert.match(guidelines, /Choose from task context/);
+  assert.match(guidelines, /Prefer codemode_o for short, self-contained programs within its syntax\/limits/);
+  assert.match(guidelines, /Call either tool directly \(model-only\)/);
+  assert.match(guidelines, /Use native codemode upfront/);
+  assert.match(guidelines, /Pi globals\/@options\/models, images, MCP \(readiness\), long-running work, or uncertain compatibility/);
+  assert.match(guidelines, /Preflight validates, never routes/);
+  assert.match(guidelines, /NativeCodemodeRequired means no source ran/);
+  assert.match(guidelines, /use native if active, otherwise report it is needed/);
+  assert.match(guidelines, /Never automatically replay execution failures; effects are not rolled back/);
+  assert.equal(tool.exposure, "model-only");
+  assert.equal(tool.defaultActive, true);
+  assert.ok(tool.promptSnippet && !tool.promptSnippet.includes("\n"));
+  for (const description of [tool.description, tool.prepareLoadout({ callable: [] }).descriptions.codemode_o]) {
+    assert.match(description, /Prefer codemode_o for short, self-contained programs/);
+    assert.match(description, /native codemode directly only if active/);
+    assert.match(description, /Never automatically replay after an execution failure/);
+  }
+});
+
 test("runs a fresh confined program and calls one pi tool", async () => {
   const tool = registeredTool();
   assert.equal(tool.name, "codemode_o");

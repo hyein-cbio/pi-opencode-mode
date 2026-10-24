@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.1.1 — 2026-10-24
+
+### Improvements
+
+- Prefer `codemode_o` for short, compatible programs through concise model
+  context guidance; choose native `codemode` upfront for Pi-specific features,
+  images, MCP readiness, long-running work, or uncertain compatibility.
+- Separate LLM tool selection from compatibility-only preflight validation.
+  Preserve the historical routing helper and metadata for compatibility.
+- Report compatibility outcomes in `details.preflight`; keep native-availability
+  caveats explicit and never automatically delegate or replay execution failures.
+- Add regression coverage for active/inactive/unloaded prompt guidance and
+  duplicate-free reactivation; update tool-selection and testing documentation.
+
+### Known limits
+
+- Guidance influences model choice; it is not enforced routing or a performance
+  guarantee. Custom prompts and higher-priority instructions may affect it.
+- MCP startup/reconnect readiness coordination remains out of scope; prefer
+  native `codemode` for MCP workflows.
+
 ## 0.1.0 — 2026-10-23
 
 Initial public release.
