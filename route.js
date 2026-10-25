@@ -99,7 +99,9 @@ export function checkOpenCodeCompatibility(code, parseSource = parse) {
     const { node, parent, key, depth } = pending.pop();
     if (++count > PREFLIGHT_LIMITS.maxNodes || depth > PREFLIGHT_LIMITS.maxDepth) return rejected("source-too-complex");
     if (!SYNTAX.has(node.type)) return rejected(`unsupported-syntax:${node.type}`);
-    if (node.type === "Literal" && (node.regex || node.bigint !== undefined)) return rejected("unsupported-literal");
+    // OpenCode supports regex literals; Acorn has already validated their syntax.
+    // Keep BigInt outside our compatibility subset.
+    if (node.type === "Literal" && node.bigint !== undefined) return rejected("unsupported-literal");
     if (node.generator || (node.type === "Property" && node.kind !== "init")) return rejected("unsupported-function");
     if (node.type === "NewExpression" && (node.callee.type !== "Identifier" || !CONSTRUCTORS.has(node.callee.name))) {
       return rejected("uncertain-constructor");

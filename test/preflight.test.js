@@ -14,6 +14,68 @@ const forbiddenContext = {
   executeTool() { assert.fail("no host calls or native delegation"); },
 };
 
+test("regex log extraction executes the formerly rejected program with stub host tools", async () => {
+  const code = String.raw`const log = await tools.read({path:"test-log.txt"});
+return {summary: log.match(/ℹ (tests|pass|fail|skipped) [0-9]+/g), exits: log.match(/"exit_code":\d+/g), diff: await tools.bash({command:"git diff --check && git status --short",timeout:15})};`;
+  const params = { code };
+  const calls = [];
+  const diff = { output: " M renderer.js\n", truncated: false, exit_code: 0 };
+  const result = await registeredTool().execute("regex-log", params, undefined, undefined, {
+    tools: ["read", "bash"].map((name) => ({ name, parameters: { type: "object" } })),
+    async executeTool(name, args) {
+      calls.push({ name, args });
+      return { result: name === "read"
+        ? { content: [{ type: "text", text: 'ℹ tests 78\nℹ pass 78\nℹ fail 0\nℹ skipped 0\n{"exit_code":0}' }] }
+        : { content: [], structuredContent: diff } };
+    },
+  });
+  assert.equal(result.isError, undefined);
+  assert.equal(result.details.ok, true);
+  assert.equal(result.details.preflight.supported, true);
+  assert.equal(params.code, code, "no rewriting or native replay");
+  assert.deepEqual(JSON.parse(result.content[0].text), {
+    summary: ["ℹ tests 78", "ℹ pass 78", "ℹ fail 0", "ℹ skipped 0"],
+    exits: ['"exit_code":0'], diff,
+  });
+  assert.deepEqual(calls, [
+    { name: "read", args: { path: "test-log.txt" } },
+    { name: "bash", args: { command: "git diff --check && git status --short", timeout: 15 } },
+  ]);
+  assert.deepEqual(result.details.calls.map((call) => call.status), ["ok", "ok"]);
+});
+
+test("regex literal methods and flags execute in the installed OpenCode runtime", async () => {
+  for (const [code, expected] of [
+    ['return /x/.test("x");', true],
+    [String.raw`return "A/b a/B".match(/a\/b/gi);`, ["A/b", "a/B"]],
+    [String.raw`return /^한.$/u.test("한😀");`, true],
+    [String.raw`return /^b$/m.test("a\nb");`, true],
+    [String.raw`return /a.b/s.test("a\nb");`, true],
+    ['const re = /a/y; return [re.test("aa"), re.lastIndex, re.test("aa"), re.lastIndex];', [true, 1, true, 2]],
+    ['return /a/d.exec("ba").indices[0];', [1, 2]],
+    ['return /[a&&a]/v.test("a");', true],
+    ['return /text|models|@options:/.test("models");', true],
+  ]) {
+    const result = await registeredTool().execute("regex", { code }, undefined, undefined, { tools: [] });
+    assert.equal(result.details.ok, true, code);
+    assert.deepEqual(JSON.parse(result.content[0].text), expected, code);
+  }
+});
+
+test("malformed regex literals fail as source syntax errors before any host call", async () => {
+  for (const literal of ["/[/", "/x/gg", "/x/z", "/x/uv", "/unterminated"]) {
+    const code = `await tools.write({}); return ${literal};`;
+    const preflight = checkOpenCodeCompatibility(code);
+    assert.deepEqual(preflight.reasons, ["invalid-script-syntax"]);
+    assert.equal(preflight.diagnostic.kind, "SourceSyntaxError");
+    const result = await registeredTool().execute("bad-regex", { code }, undefined, undefined, forbiddenContext);
+    assert.equal(result.isError, true);
+    assert.equal(result.details.error.kind, "SourceSyntaxError");
+    assert.deepEqual(result.details.calls, []);
+    assert.doesNotMatch(result.content[0].text, /NativeCodemodeRequired/);
+  }
+});
+
 test("raw newlines in quoted strings retain Acorn positions and escape guidance", () => {
   for (const quote of ['"', "'"]) {
     for (const newline of ["\n", "\r", "\r\n"]) {

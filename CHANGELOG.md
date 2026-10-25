@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- Allow OpenCode-supported regular-expression literals through preflight instead
+  of incorrectly reporting `NativeCodemodeRequired`; preserve syntax errors for
+  invalid patterns/flags and existing BigInt/Pi-only restrictions.
+- Preserve Pi's native pending/success/error panel backgrounds when call rows
+  are shortened or wrapped, including duration text and trailing padding.
+
 ## 0.1.2 — 2026-10-25
 
 ### Improvements

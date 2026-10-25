@@ -77,12 +77,18 @@ class CallList {
         lines.push(truncateToWidth(line, width, "…"));
       }
     }
-    return lines;
+    // These rows use foreground colors and intensity only. TUI truncation and
+    // wrapping can insert SGR 0, which also erases Pi's outer panel background
+    // before the ellipsis, duration and padding. Close just our text styles;
+    // leave pending/success/error backgrounds owned by Pi's native shell.
+    return lines.map((line) => line.replaceAll("\x1b[0m", "\x1b[22;39m"));
   }
   invalidate() {}
 }
 
 export const openCodeRenderers = {
+  // Like native codemode, let Pi supply its state-colored outer Box.
+  renderShell: "default",
   renderCall(args, theme, context) {
     const state = context.state;
     if (context.executionStarted && state.startedAt === undefined) state.startedAt = Date.now();

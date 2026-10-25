@@ -3,7 +3,7 @@ import test from "node:test";
 import { stripVTControlCharacters } from "node:util";
 import { setTimeout as delay } from "node:timers/promises";
 import { createCodemodeExtension, initTheme } from "@earendil-works/pi-coding-agent";
-import { visibleWidth } from "@earendil-works/pi-tui";
+import { Box, visibleWidth } from "@earendil-works/pi-tui";
 import { createOpenCodeModeExtension } from "../index.js";
 import { formatDuration } from "../renderer.js";
 
@@ -94,6 +94,56 @@ test("call summaries render duplicate names as distinct status rows without chan
   assert.ok(expanded.endsWith("Took 0.0s"));
   assert.match(expanded, /\n42\n/);
   assert.deepEqual(value, snapshot);
+});
+
+test("call rows keep Pi's state-colored shell background through truncation and wrapping", () => {
+  const definition = tool();
+  assert.notEqual(definition.renderShell, "self", "Pi owns the shell, as with native codemode");
+  const ansiTheme = {
+    fg(color, value) {
+      return color === "dim" ? `\x1b[90;2m${value}\x1b[22;39m` : `\x1b[37m${value}\x1b[39m`;
+    },
+  };
+  const value = result("", { calls: Array.from({ length: 10 }, () => ({
+    name: "read", args: JSON.stringify({ path: "한😀long_path/".repeat(30) }),
+    status: "ok", durationMs: 70,
+  })) });
+  const snapshot = structuredClone(value);
+  let component;
+  // Model Pi's outer Box with distinct pending/success/error backgrounds. No
+  // terminal defaults, real terminal, private renderer imports or color sampling.
+  for (const [isPartial, isError, bg] of [[true, false, 43], [false, false, 42], [false, true, 41]]) {
+    for (const expanded of [false, true]) {
+      component = definition.renderResult(value, { expanded, isPartial }, ansiTheme,
+        context({ isError, lastComponent: component }));
+      component.invalidate();
+      for (const width of [5, 12, 24, 80]) {
+        const shell = new Box(1, 0, (text) => `\x1b[${bg}m${text}\x1b[49m`);
+        shell.addChild(component);
+        const rendered = shell.render(width);
+        for (const line of rendered) {
+          assert.ok(visibleWidth(line) <= width);
+          let background;
+          for (const token of line.matchAll(/\x1b\[([\d;]*)m|([^\x1b]+)/gu)) {
+            if (token[1] !== undefined) {
+              for (const code of token[1].split(";").map(Number)) {
+                if (code === 0 || code === 49) background = undefined;
+                else if (code >= 40 && code <= 47) background = code;
+              }
+            } else {
+              assert.equal(background, bg, `panel background lost at ${JSON.stringify(token[2])}`);
+            }
+          }
+        }
+        if (!expanded && width === 80) {
+          const row = rendered.find((line) => stripVTControlCharacters(line).includes("70ms"));
+          assert.ok(row, "truncated args leave room for the duration");
+          assert.match(stripVTControlCharacters(row), /… 70ms/);
+        }
+      }
+    }
+  }
+  assert.deepEqual(value, snapshot, "background fixes never change stored results");
 });
 
 test("collapsed calls show the last eight in bounded rows, expanded shows all retained previews", () => {

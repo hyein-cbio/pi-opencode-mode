@@ -71,9 +71,23 @@ test("comments, strings and ordinary property names do not trigger native routin
   assert.equal(select('return `value ${load("x")}`;').route, "codemode");
 });
 
+test("regular expression literals stay in OpenCode without reading pattern text as Pi globals", () => {
+  for (const code of [
+    'return /x/.test("x");',
+    String.raw`return "ℹ tests 78".match(/ℹ (tests|pass|fail|skipped) [0-9]+/g);`,
+    String.raw`return '{"exit_code":0}'.match(/"exit_code":\d+/g);`,
+    'return /text|image|models|store|class|@options:/.test("text");',
+    String.raw`return /a\/b/iu.test("A/b");`,
+  ]) {
+    assert.equal(select(code).route, "codemode_o", code);
+    assert.equal(checkOpenCodeCompatibility(code).executesSource, false);
+  }
+  assert.deepEqual(checkOpenCodeCompatibility("return 1n;").reasons, ["unsupported-literal"]);
+});
+
 test("unsupported or uncertain syntax selects native without speculative execution", () => {
   for (const code of [
-    'return /x/.test("x");', 'return 1n;', 'class X {} return new X();',
+    'return 1n;', 'class X {} return new X();',
     'return new Proxy({}, {});', 'return globalThis;', 'eval("return 1");',
     'return {get value() { return 1; }};', 'return function* () { yield 1; };',
     'import fs from "node:fs";', 'return import("node:fs");', 'return (',
