@@ -66,12 +66,18 @@ test("early return, race and outer abort settle cancelled rows after host cleanu
     let started;
     const ready = new Promise((resolve) => { started = resolve; });
     let settled = false;
+    let hostElapsedMs;
     const resultPromise = tool().execute("cancel", { code }, controller.signal, undefined, {
       tools: catalog,
       async executeTool(_name, _args, { signal }) {
+        const hostStartedAt = performance.now();
         started();
         try { await delay(1000, undefined, { signal }); }
-        finally { await delay(10); settled = true; }
+        finally {
+          await delay(10);
+          hostElapsedMs = performance.now() - hostStartedAt;
+          settled = true;
+        }
         return response("late");
       },
     });
@@ -81,7 +87,9 @@ test("early return, race and outer abort settle cancelled rows after host cleanu
     assert.equal(settled, true);
     assert.equal(result.details.calls.length, 1);
     assert.equal(result.details.calls[0].status, "cancelled");
-    assert.ok(result.details.calls[0].durationMs >= 10);
+    // Timers can fire slightly early; require the recorded duration to include
+    // measured host work and asynchronous cleanup, not a nominal 10ms floor.
+    assert.ok(result.details.calls[0].durationMs >= hostElapsedMs);
   }
 });
 

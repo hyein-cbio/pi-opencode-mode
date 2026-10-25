@@ -12,6 +12,12 @@ const selected = process.env.PI_OPENCODE_TEST_VERSION;
 assert.ok(!selected || supportedVersions.includes(selected), `PI_OPENCODE_TEST_VERSION must be one of ${supportedVersions.join(", ")}`);
 const versions = selected ? [selected] : supportedVersions;
 const pkg = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
+// The upstream workflow resolves npm latest once for the entire matrix. Require
+// an exact version here so a failed lookup cannot silently test the release pin.
+const upstreamVersion = process.env.PI_OPENCODE_UPSTREAM_VERSION;
+assert.ok(upstreamVersion === undefined || /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u.test(upstreamVersion),
+  "PI_OPENCODE_UPSTREAM_VERSION must be an exact version, not a tag/range or empty value");
+const codemodeVersion = upstreamVersion ?? pkg.dependencies["@opencode/codemode"];
 
 function run(args, cwd, env = {}) {
   return new Promise((resolve, reject) => {
@@ -38,14 +44,22 @@ for (const version of versions) {
     try {
       const paths = new Set([...pkg.files, "package.json", "package-lock.json", "test"]);
       await Promise.all([...paths].map((path) => cp(join(root, path), join(dir, path), { recursive: true })));
+      const manifestBefore = await readFile(join(dir, "package.json"), "utf8");
+      const lockBefore = await readFile(join(dir, "package-lock.json"), "utf8");
       for (const args of [
         ["ci", "--ignore-scripts", "--no-audit", "--no-fund"],
         ["install", "--ignore-scripts", "--no-audit", "--no-fund", "--no-save", "--package-lock=false",
-          `@earendil-works/pi-coding-agent@${version}`, `@earendil-works/pi-tui@${version}`],
+          `@earendil-works/pi-coding-agent@${version}`, `@earendil-works/pi-tui@${version}`,
+          ...(upstreamVersion === undefined ? [] : [`@opencode/codemode@${upstreamVersion}`])],
       ]) {
         const result = await run(args, dir);
         assert.equal(result.code, 0, result.output);
       }
+      assert.equal(await readFile(join(dir, "package.json"), "utf8"), manifestBefore, "keep release manifest unchanged");
+      assert.equal(await readFile(join(dir, "package-lock.json"), "utf8"), lockBefore, "keep release lockfile unchanged");
+      const installedCodeMode = JSON.parse(await readFile(join(dir, "node_modules/@opencode/codemode/package.json"), "utf8"));
+      assert.equal(installedCodeMode.version, codemodeVersion, "must execute the requested CodeMode, not the lockfile version");
+      t.diagnostic(`Testing actual @opencode/codemode ${installedCodeMode.version}`);
       const sdk = join(dir, "node_modules/@earendil-works/pi-coding-agent");
       for (const name of ["pi-coding-agent", "pi-tui"]) {
         const installed = JSON.parse(await readFile(join(dir, `node_modules/@earendil-works/${name}/package.json`), "utf8"));
@@ -55,7 +69,7 @@ for (const version of versions) {
       assert.equal(result.code, 0, result.output);
       assert.ok(result.output.includes(`Actual SDK ${version};`), "the real-session suite must run");
       assert.match(result.output, /\bskipped 0\b/u, "compatibility runs must not skip SDK coverage");
-      t.diagnostic(`Node ${process.version}; Pi ${version}; full suite passed with no skips`);
+      t.diagnostic(`Node ${process.version}; Pi ${version}; CodeMode ${installedCodeMode.version}; full suite passed with no skips`);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

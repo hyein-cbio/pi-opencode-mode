@@ -1,0 +1,74 @@
+name: Latest upstream CodeMode
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+  workflow_dispatch:
+
+# Checks only: no repository writes, auto-merge, release or npm publication.
+permissions:
+  contents: read
+
+jobs:
+  resolve-latest:
+    name: Resolve current npm latest
+    # Check the PR author, not the person who merged it or triggered the event.
+    # Manual dispatch is independent of PR author/merge conditions.
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true && github.event.pull_request.user.login == 'cursor[bot]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.latest.outputs.version }}
+    steps:
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24.x'
+      - name: Query npm, without falling back to the pinned version
+        id: latest
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { execFileSync } from 'node:child_process';
+          import { appendFileSync } from 'node:fs';
+          const version = JSON.parse(execFileSync('npm', [
+            'view', '@opencode/codemode@latest', 'version', '--json',
+            '--registry=https://registry.npmjs.org/', '--prefer-online',
+          ], { encoding: 'utf8' }));
+          assert.equal(typeof version, 'string');
+          assert.match(version, /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/);
+          appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\n`);
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+            `Testing npm latest: **@opencode/codemode@${version}** across all six Node/Pi combinations.\n`);
+          console.log(`Resolved @opencode/codemode@latest to ${version}`);
+          JS
+
+  compatibility:
+    needs: resolve-latest
+    name: CodeMode ${{ needs.resolve-latest.outputs.version }} / Node ${{ matrix.node }} / Pi ${{ matrix.pi }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22.19.0', '24.x']
+        pi: ['0.99.0', '1.3.0', '1.4.0']
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          # PR runs test the merged revision; manual runs test the selected ref.
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      # Installs the resolved candidate only in a disposable copy, verifies its
+      # actual version, and runs the full suite (including SDK sessions).
+      - name: Test the latest upstream package, without changing release pins
+        run: npm run test:pi-versions
+        env:
+          PI_OPENCODE_TEST_VERSION: ${{ matrix.pi }}
+          PI_OPENCODE_UPSTREAM_VERSION: ${{ needs.resolve-latest.outputs.version }}
+          NPM_CONFIG_REGISTRY: https://registry.npmjs.org/

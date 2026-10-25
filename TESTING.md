@@ -76,6 +76,54 @@ scripts are deliberately disabled in this harness; ordinary checkout installs
 still use `npm ci`. No paid model calls, npm publication, release creation, or
 repository visibility changes are part of CI.
 
+## Post-merge latest-upstream check
+
+`.github/workflows/upstream-codemode.yml` automatically runs its latest-version
+checks when a PR **authored by `cursor[bot]` is merged into main**. Manual runs
+are also available through `workflow_dispatch`, independently of PR authorship.
+There is no weekly schedule. Closing a PR without merging, or merging a PR
+from another author, skips the automatic lookup and test matrix. The author is
+checked through `github.event.pull_request.user.login`, not `github.actor` or
+`merged_by.login`: a human can merge a Cursor-authored PR and still trigger
+the checks. PR #1 was verified through the GitHub REST API as authored by
+`cursor[bot]` (the CLI GraphQL view displays this identity as `app/cursor`).
+
+For PR events, checkout is pinned to the merged revision; manual runs use the
+selected ref at dispatch time. Each qualifying PR gets its own run without a
+shared concurrency group dropping queued checks. This is
+separate from normal push/PR CI, which continues to test the release-pinned
+dependency for all authors.
+
+Each run queries the public npm registry for `@opencode/codemode@latest`, then
+uses that exact resolved version across all six Node/Pi combinations. Registry
+lookup/install failures fail the check; there is no fallback to the pinned
+version. Each clean-copy run verifies the installed CodeMode version before
+running the full suite, including real SDK sessions with no skips. Versions
+are recorded in the job summary and test diagnostics. A new upstream version
+may fail installation, engine checks or tests; that is a compatibility signal,
+not a reason to skip it or silently select an older version.
+
+To reproduce one combination locally (network/install enabled):
+
+```sh
+latest=$(npm view @opencode/codemode@latest version --registry=https://registry.npmjs.org/ --prefer-online) &&
+  PI_OPENCODE_TEST_VERSION=1.4.0 PI_OPENCODE_UPSTREAM_VERSION="$latest" npm run test:pi-versions
+```
+
+`PI_OPENCODE_UPSTREAM_VERSION` must contain an exact version, not `latest` or a
+version range. Without it, the harness tests the release-pinned CodeMode as
+before. Candidate installs happen only in disposable copies, with lifecycle
+scripts disabled and manifest/lockfile preservation checked. This workflow
+never updates dependencies in the repository, merges PRs, creates releases or
+publishes to npm. Passing CI is evidence for a reviewed update, not automatic
+approval for deployment.
+
+Local validation on 2026-10-25 used Node **26.12.1** and actual upstream
+CodeMode **2.1.4** against Pi **0.99.0 / 1.3.0 / 1.4.0**; all three full suites
+passed without skips. This is not a claim that the new hosted workflow has
+already run. Cancellation timing tests compare recorded duration with measured
+host/cleanup elapsed time rather than a nominal timer-delay floor.
+
 ## 0.1.0 preparation evidence
 
 The clean-copy matrix was reproduced locally on macOS:
