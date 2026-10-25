@@ -7,6 +7,7 @@ import { findPackageJSON } from "node:module";
 import { pathToFileURL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { createOpenCodeModeExtension } from "../index.js";
+import { rawNewlineSource } from "./fixtures/preflight-source.js";
 
 // Explicit local SDK package directory only. Never installs or discovers private settings.
 const sdk = process.env.PI_OPENCODE_SDK;
@@ -181,6 +182,24 @@ test("isolated real Pi SDK session", { skip: !sdk && "set PI_OPENCODE_SDK to a l
       assert.equal(state.echoRuns, before);
       assert.equal(result.nestedCalls?.calls?.length ?? 0, 0);
       assert.ok(session.getActiveToolNames().includes("codemode"));
+    });
+    await t.test("raw newline syntax errors do not reach tools or native; escaped source stays intact", async () => {
+      const before = state.echoRuns;
+      for (const source of [rawNewlineSource, 'await tools.safe_echo({value: 1}); return "\n";']) {
+        const result = await run(source);
+        assert.equal(result.isError, true);
+        assert.equal(result.details.error.kind, "SourceSyntaxError");
+        assert.match(result.content[0].text, /Unterminated string constant/);
+        assert.match(result.content[0].text, /Escape newlines/);
+        assert.doesNotMatch(result.content[0].text, /Use Pi\x27s built-in codemode/);
+        assert.equal(result.details.preflight.executesSource, false);
+        assert.equal(result.nestedCalls?.calls?.length ?? 0, 0);
+        assert.equal(state.echoRuns, before);
+      }
+      const escaped = await run('await tools.safe_echo({value: 1}); return "\\n";');
+      assert.equal(escaped.isError, false);
+      assert.equal(JSON.parse(escaped.content[0].text), "\n");
+      assert.equal(state.echoRuns, before + 1);
     });
     await t.test("early return and race drain cancelled nested calls", async () => {
       // Immediate cancellation can correctly stop a call before its body starts.

@@ -96,7 +96,7 @@ test("runs a fresh confined program and calls one pi tool", async () => {
 
   const imported = await tool.execute("c4", { code: "import fs from \"node:fs\"" }, undefined, undefined, ctxWith([]));
   assert.equal(imported.isError, true);
-  assert.match(imported.content[0].text, /^NativeCodemodeRequired:/);
+  assert.match(imported.content[0].text, /^SourceSyntaxError:/);
   assert.equal(imported.details.route.route, "codemode");
 
   const nested = await tool.execute("c5", {

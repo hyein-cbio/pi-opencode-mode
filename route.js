@@ -1,4 +1,4 @@
-import { parse } from "acorn";
+import { getLineInfo, parse } from "acorn";
 
 export const ROUTE_TOOLS = Object.freeze(["codemode", "codemode_o"]);
 // Compatibility limits, not a tool-selection policy or execution/output limits.
@@ -37,10 +37,40 @@ function propertyName(node, parent, key) {
     (parent?.type === "Property" && key === "key" && !parent.computed && !parent.shorthand);
 }
 
-/** Checks only whether an already-selected codemode_o call may run. Never selects a tool. */
-export function checkOpenCodeCompatibility(code) {
-  const rejected = (reason) => Object.freeze({
+function parserDiagnostic(error, code) {
+  const offset = (value) => Number.isInteger(value) && value >= 0 && value <= code.length;
+  // Acorn source errors carry a valid source offset. A bare SyntaxError from
+  // inside the parser is not enough evidence to blame the input.
+  const syntax = error instanceof SyntaxError && offset(error.pos);
+  const original = typeof error?.message === "string" ? error.message :
+    typeof error === "string" ? error : "Parser failed without a message";
+  // Bound before retaining diagnostics. 128 Unicode code points use at most
+  // 512 UTF-8 bytes, leaving room for location and recovery guidance later.
+  const clipped = Array.from(original.slice(0, 1024)).slice(0, 128).join("");
+  const message = clipped + (clipped.length < original.length ? "… [parser message truncated]" : "");
+  const location = (value) => {
+    const { line, column } = getLineInfo(code, value);
+    return Object.freeze({ line, column });
+  };
+  return Object.freeze({
+    kind: syntax ? "SourceSyntaxError" : "PreflightParserError",
+    message, parser: "acorn", sourceType: "script",
+    ...(offset(error?.pos) ? { pos: error.pos, location: location(error.pos) } : {}),
+    ...(offset(error?.raisedAt) ? { raisedAt: error.raisedAt, detectedLocation: location(error.raisedAt) } : {}),
+    ...(syntax && original.startsWith("Unterminated string constant") &&
+      offset(error.raisedAt) && /[\r\n]/u.test(code.charAt(error.raisedAt)) ? {
+        hint: "Escape newlines inside quoted JS strings as \\n (\\\\n inside a JSON code string).",
+      } : {}),
+  });
+}
+
+/** Checks only compatibility; never executes source or selects a tool.
+ * The optional parser dependency supports offline failure injection; tool input cannot set it.
+ */
+export function checkOpenCodeCompatibility(code, parseSource = parse) {
+  const rejected = (reason, diagnostic) => Object.freeze({
     supported: false, reasons: Object.freeze([reason]), executesSource: false,
+    ...(diagnostic ? { diagnostic } : {}),
   });
   if (typeof code !== "string") return rejected("empty-source");
   if (code.length > PREFLIGHT_LIMITS.maxSourceBytes || Buffer.byteLength(code, "utf8") > PREFLIGHT_LIMITS.maxSourceBytes) {
@@ -52,12 +82,13 @@ export function checkOpenCodeCompatibility(code) {
   let ast;
   let options = false;
   try {
-    ast = parse(code, {
+    ast = parseSource(code, {
       ecmaVersion: "latest", sourceType: "script", allowReturnOutsideFunction: true, allowAwaitOutsideFunction: true,
       onComment(_block, text) { if (/^\s*@options\s*:/u.test(text)) options = true; },
     });
-  } catch {
-    return rejected("parse-uncertain");
+  } catch (error) {
+    const diagnostic = parserDiagnostic(error, code);
+    return rejected(diagnostic.kind === "SourceSyntaxError" ? "invalid-script-syntax" : "internal-parser-error", diagnostic);
   }
   if (options) return rejected("pi-options");
   if (!ast.body.some((node) => node.type !== "EmptyStatement")) return rejected("empty-source");

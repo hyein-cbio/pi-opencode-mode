@@ -17,6 +17,7 @@ const BASE = [
   "No import, process, require, eval, Function, filesystem, network, or timers except through those tools.",
   `Each run is fresh. Limits: ${LIMITS.timeoutMs}ms before interruption (host cleanup is awaited), ${LIMITS.maxToolCalls} tool calls, ${LIMITS.maxOutputBytes} final UTF-8 text bytes including logs and diagnostics.`,
   "Warnings and truncation are visible; truncated data is a preview, not complete JSON. Host cancellation requires cooperative tools.",
+  "SourceSyntaxError means fix the JS source before running it; PreflightParserError means the preflight parser failed. Neither recommends replaying the same source in native codemode.",
 ].join(" ");
 
 function message(error) {
@@ -141,7 +142,32 @@ function renderResult(result) {
   };
 }
 
-export function createOpenCodeModeExtension() {
+function preflightError(preflight) {
+  const diagnostic = preflight.diagnostic;
+  if (!diagnostic) {
+    return {
+      kind: "NativeCodemodeRequired",
+      message: `Source was not executed (${preflight.reasons.join(", ")}). Use Pi's built-in codemode with this source if active; otherwise report that native codemode is needed. No automatic delegation or replay was attempted.`,
+    };
+  }
+  const position = (label, location, offset) => location ?
+    ` ${label}: line ${location.line}, column ${location.column} (0-based), UTF-16 offset ${offset}.` : "";
+  const guidance = diagnostic.kind === "SourceSyntaxError" ?
+    "Invalid JavaScript in script mode; fix the source before running it." :
+    "The preflight parser failed internally; report this error before retrying.";
+  return {
+    kind: diagnostic.kind,
+    message: `Source was not executed. ${guidance}` +
+      position("Location", diagnostic.location, diagnostic.pos) +
+      position("Detected at", diagnostic.detectedLocation, diagnostic.raisedAt) +
+      (diagnostic.hint ? ` ${diagnostic.hint}` : "") +
+      ` Acorn: ${diagnostic.message} No source rewriting, delegation or replay was attempted.`,
+    ...(diagnostic.location ? { location: diagnostic.location } : {}),
+  };
+}
+
+// Optional parser injection is for offline failure tests, never a guest argument.
+export function createOpenCodeModeExtension({ parseSource } = {}) {
   return function openCodeModeExtension(pi) {
     pi.registerTool({
       name: TOOL_NAME,
@@ -169,7 +195,7 @@ export function createOpenCodeModeExtension() {
       async execute(_toolCallId, params, signal, _onUpdate, ctx) {
         const startedAt = performance.now();
         const code = typeof params?.code === "string" ? params.code : "";
-        const preflight = checkOpenCodeCompatibility(code);
+        const preflight = checkOpenCodeCompatibility(code, parseSource);
         // Legacy metadata only, not a dispatch decision. No native tool is executed here.
         const route = Object.freeze({
           decision: "selected", route: preflight.supported ? TOOL_NAME : "codemode",
@@ -183,10 +209,7 @@ export function createOpenCodeModeExtension() {
           // Built-in codemode is model-only: do not bypass Pi's invocation boundary.
           return finish(renderResult({
             ok: false,
-            error: {
-              kind: "NativeCodemodeRequired",
-              message: `Source was not executed (${preflight.reasons.join(", ")}). Use Pi's built-in codemode with this source if active; otherwise report that native codemode is needed. No automatic delegation or replay was attempted.`,
-            },
+            error: preflightError(preflight),
             toolCalls: [],
           }));
         }

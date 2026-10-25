@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- Distinguish invalid script syntax (`SourceSyntaxError`) and unexpected
+  preflight parser exceptions (`PreflightParserError`) from native-required
+  compatibility limitations; do not recommend native replay for these failures.
+- Preserve bounded Acorn messages and valid UTF-16 offsets/line-column locations,
+  including the string start and newline detection position. Explain JS/JSON
+  newline escaping without rewriting source or executing any host tool.
+- Add raw LF/CR/CRLF, escaped heredoc/Korean multi-call, parser failure injection,
+  diagnostic budget, and isolated real-session regression coverage.
+
 ## 0.1.1 — 2026-10-24
 
 ### Improvements

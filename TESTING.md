@@ -24,7 +24,7 @@ npm test
 
 After dependencies are installed, the tests do not install SDKs or use model
 APIs. Without `PI_OPENCODE_SDK`, the session suite explicitly skips: the current
-result is **42 passed, 1 skipped**. The boundary tests include literal 30-second
+result is **49 passed, 1 skipped**. The boundary tests include literal 30-second
 timeout and delayed-cleanup probes, so the suite takes at least 30 seconds.
 
 ## Full suite with an existing SDK
@@ -35,14 +35,14 @@ To use the SDK installed by `npm ci`:
 PI_OPENCODE_SDK="$PWD/node_modules/@earendil-works/pi-coding-agent" npm test
 ```
 
-Expected result: **51 passed, 0 skipped**, including the SDK suite's parent and
-eight subtests. To run only the session suite:
+Expected result: **59 passed, 0 skipped**, including the SDK suite's parent and
+nine subtests. To run only the session suite:
 
 ```sh
 PI_OPENCODE_SDK="$PWD/node_modules/@earendil-works/pi-coding-agent" node --test test/session.test.js
 ```
 
-Expected result: **9 passed, 0 skipped**. You can also supply an absolute path to
+Expected result: **10 passed, 0 skipped**. You can also supply an absolute path to
 another installed SDK package directory. For an exact dependency-version test,
 use the clean-copy matrix below rather than mixing a local host installation
 with another SDK directory.
@@ -118,6 +118,12 @@ those advisories. Keep the host installation updated independently.
   source/AST limits, rejection before any host effect, and no automatic replay.
   Tool selection is explicitly assigned to the LLM context; the legacy advisory
   API is preserved but is not called by the extension execution path.
+- Parser diagnostics: raw LF/CR/CRLF in quoted strings versus escaped newlines,
+  heredoc/Korean multi-call fixtures with in-memory tools only, UTF-16 offsets
+  and CRLF line positions, bounded original messages without stack retention,
+  parser exception injection, and syntax versus unsupported-syntax separation.
+  Isolated SDK sessions verify syntax rejection before even earlier host calls
+  and preserve escaped-source results without repair or native delegation.
 - Lifecycle: early return, race losers, user abort, literal deadline, and awaited
   cooperative host cleanup, including Pi hooks and completed nested-call audits.
 - Output: final UTF-8/JSON-escaping bounds, Unicode, logs, huge errors, visible
