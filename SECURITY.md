@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Security fixes target the latest released version, currently **0.1.2**.
+Security fixes target the latest released version, currently **0.1.3**.
 See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## Reporting a vulnerability

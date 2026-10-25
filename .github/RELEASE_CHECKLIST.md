@@ -1,11 +1,11 @@
-# Maintainer release checklist — 0.1.2
+# Maintainer release checklist — 0.1.3
 
 Preparation does not publish anything. Repository visibility, npm publication,
 and release/tag creation are explicit maintainer actions.
 
 ## Before publishing
 
-- [ ] Review the diff; ensure `package.json` and `package-lock.json` both say `0.1.2`.
+- [ ] Review the diff; ensure `package.json` and `package-lock.json` both say `0.1.3`.
 - [ ] Run `npm ci`, `npm audit`, and `npm run test:pi-versions`.
 - [ ] Confirm all six GitHub CI jobs pass after the changes are pushed.
 - [ ] Inspect `npm pack --dry-run --json`; check for secrets in the tree and history.
@@ -19,7 +19,7 @@ and release/tag creation are explicit maintainer actions.
       repository is public, and verify the reporting link in `SECURITY.md` works.
 - [ ] For npm publication, remove `private: true`, verify the npm package name
       is available to your account, and recheck the manifest/lockfile and tarball.
-- [ ] Mark the `0.1.2` changelog entry released, create the `v0.1.2` tag and GitHub
+- [ ] Mark the `0.1.3` changelog entry released, create the `v0.1.3` tag and GitHub
       release, and publish the intended package version to npm.
 - [ ] Verify installation from the published source, then update the README with
       the confirmed npm and/or tagged Git install command.

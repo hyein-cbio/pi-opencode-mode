@@ -125,6 +125,24 @@ and **undici 8.10.2**, as documented for 0.1.1. These host packages are not bund
 in the extension tarball; this patch does not downgrade the host or change the
 dependency lock tree to suppress those advisories.
 
+## 0.1.3 release verification — 2026-10-25
+
+On macOS arm64 with Node **26.12.1**, `npm ci` followed by the full suite with
+an explicit local SDK passed **82 tests, 0 failures, 0 skips**. Regression tests
+cover regular-expression literals and all supported flags, malformed patterns
+rejected before host calls, the previously rejected log-extraction program with
+safe host stubs, and panel-background preservation through row truncation and
+wrapping. No live-provider/model walkthrough or new benchmark was performed.
+
+The implementation commit `a76c79f` passed all six hosted CI combinations:
+Node **22.19.0 / 24.x** with Pi **0.99.0 / 1.3.0 / 1.4.0**. Release metadata is
+verified separately by the CI run on the release commit before publication.
+
+`npm audit --omit=peer` reports **0 vulnerabilities**. Full `npm audit` retains
+the previously documented **1 moderate / 1 high** entry through the locked test
+host and undici; neither host package is bundled in the extension tarball.
+`npm pack --dry-run --json` includes only the 11 intended package files.
+
 ## Coverage
 
 - Fresh execution and bridge behavior: structured/text returns, error handling,

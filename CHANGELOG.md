@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.1.3 — 2026-10-25
+
+### Improvements
+
+- Simplify the source-preview notice to `Preview; expand for original`.
 
 ### Fixes
 

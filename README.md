@@ -28,13 +28,13 @@ interpreter choice, not an OpenCode server or a replacement Pi CLI.
 Install the versioned npm package in Pi:
 
 ```sh
-pi install npm:pi-opencode-mode@0.1.2
+pi install npm:pi-opencode-mode@0.1.3
 ```
 
 Or install the tagged Git source:
 
 ```sh
-pi install git:github.com/hyein-cbio/pi-opencode-mode@v0.1.2
+pi install git:github.com/hyein-cbio/pi-opencode-mode@v0.1.3
 ```
 
 Restart Pi after installation. To explicitly enable both code tools:
@@ -54,7 +54,7 @@ Requires **Node.js >= 22.19.0**, npm, Git, and **Pi >= 0.99.0, < 2.0.0** with a 
 1. **Install from source for the walkthrough.** Use the release tag so the examples match this version.
 
    ```sh
-   git clone --branch v0.1.2 https://github.com/hyein-cbio/pi-opencode-mode.git
+   git clone --branch v0.1.3 https://github.com/hyein-cbio/pi-opencode-mode.git
    cd pi-opencode-mode
    npm ci
    ```
@@ -114,7 +114,7 @@ milliseconds** (lower is better).
 - `pi-opencode-mode` **0.0.1** at revision
   [`53b9dd9`](https://github.com/hyein-cbio/pi-opencode-mode/tree/53b9dd937ad53cd3558b086ab21e812780524d5a),
   OpenCode CodeMode **2.1.0**, Effect **4.0.1**. This is a **historical snapshot,
-  not a fresh measurement of 0.1.2**; later code changes have not been remeasured
+  not a fresh measurement of 0.1.3**; later code changes have not been remeasured
   in this table.
 - **20 warm samples**, 4 warmups, and one first-invocation control per eligible
   case/tool. p95 is nearest-rank. The clock spans root tool execution, including
@@ -284,7 +284,7 @@ Real-session tests use disposable directories, in-memory history/settings, scrip
 
 ## Project information
 
-- [Changes and 0.1.2 release notes](CHANGELOG.md)
+- [Changes and 0.1.3 release notes](CHANGELOG.md)
 - [Security policy and private reporting](SECURITY.md)
 - [Bug reports and feature requests](https://github.com/hyein-cbio/pi-opencode-mode/issues)
 
