@@ -42,7 +42,7 @@
     "test:pi-versions": "node --test test/pi-versions.test.js"
   },
   "dependencies": {
-    "@opencode/codemode": "2.1.0",
+    "@opencode/codemode": "2.1.4",
     "acorn": "8.15.0",
     "effect": "4.0.1"
   },
