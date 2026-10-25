@@ -106,6 +106,25 @@ host packages are not bundled in this extension's tarball; managed Pi installs
 supply them. This release does not override or downgrade the host to suppress
 those advisories. Keep the host installation updated independently.
 
+## 0.1.2 release verification — 2026-10-25
+
+On macOS arm64 with Node **26.12.1**, clean disposable installs passed the full
+suite, including isolated SDK sessions, against Pi **0.99.0**, **1.3.0**, and
+**1.4.0**, with no skips. The suite now contains **76 passing tests**. GitHub CI
+separately gates Node **22.19.0 / 24.x** across those same three Pi baselines.
+
+The package includes both new runtime modules (`call-log.js` and
+`source-preview.js`); no additional formatter dependency is required. Tests
+cover call snapshots, duplicate names, statuses, cancellation cleanup, source
+layout and original-source preservation. Rendering checks use safe fixtures,
+not a live-provider/model walkthrough or a new performance measurement.
+
+`npm audit --omit=peer` reports **0 vulnerabilities**. Full `npm audit` still
+reports **1 moderate / 1 high** entry through the locked test host Pi **1.3.0**
+and **undici 8.10.2**, as documented for 0.1.1. These host packages are not bundled
+in the extension tarball; this patch does not downgrade the host or change the
+dependency lock tree to suppress those advisories.
+
 ## Coverage
 
 - Fresh execution and bridge behavior: structured/text returns, error handling,
