@@ -24,6 +24,7 @@
     "index.js",
     "route.js",
     "renderer.js",
+    "call-log.js",
     "LICENSE",
     "README.md",
     "TESTING.md",
@@ -36,7 +37,7 @@
     ]
   },
   "scripts": {
-    "test": "node --test test/extension.test.js test/route.test.js test/preflight.test.js test/renderer.test.js test/readme.test.js test/boundaries.test.js test/session.test.js",
+    "test": "node --test test/extension.test.js test/route.test.js test/preflight.test.js test/renderer.test.js test/call-log.test.js test/readme.test.js test/boundaries.test.js test/session.test.js",
     "test:pi-versions": "node --test test/pi-versions.test.js"
   },
   "dependencies": {

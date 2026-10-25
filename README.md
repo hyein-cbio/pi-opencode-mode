@@ -224,11 +224,26 @@ The supported Pi range is **>= 0.99.0, < 2.0.0**, with matching Pi/TUI versions.
 
 ## Output presentation
 
-The TUI shows a syntax-highlighted source preview (10 visual lines), a compact
-result preview (5 visual lines), and the native-style muted `Took 0.1s` footer.
-Use Pi's configured tool-expansion shortcut to see the full retained source or
-output. Limits count wrapped terminal lines, including long JSON and Unicode.
-Warnings and incomplete-output indicators remain visible above collapsed data.
+The TUI shows a syntax-highlighted source preview (10 visual lines), live
+nested-call rows, a compact result preview (5 visual lines), and the native-style
+muted `Took 0.1s` footer. Use Pi's configured tool-expansion shortcut for details.
+Limits count wrapped terminal lines, including long JSON and Unicode. Warnings
+and incomplete-output indicators remain visible above collapsed data.
+
+- **One row per host-call attempt.** Repeated names remain separate rows in
+  invocation order, with `…` running, `✓` success, `✗` error, and `⊘` cancelled,
+  argument previews and elapsed time. Permission/schema failures are attempts,
+  not proof a host body ran. Collapsed views show the last eight calls, each in
+  one width-bounded row; expansion shows all retained previews and error text.
+- **Live and restored records.** `onUpdate` publishes detached snapshots during
+  execution; final `details.calls` retains up to 64 records after host cleanup.
+  Each record keeps a name (128 UTF-8 bytes), argument preview (1,024 bytes),
+  status, duration and optional error preview (512 bytes), never result bodies.
+  Arguments are depth/item/string-limited before serialization, so expanded
+  previews are still bounded and may be incomplete JSON. No additional full
+  argument/output file is written. Legacy rows without call metadata do not
+  invent calls or success states. Existing `details.toolCalls` remains unchanged;
+  interpreter-only discovery is not fabricated as a timed host call.
 
 Each result records monotonic elapsed milliseconds in `details.durationMs`,
 including preflight, execution, and awaited host cleanup, on success, failure,

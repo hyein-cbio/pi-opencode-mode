@@ -31,6 +31,55 @@ function render(value, options = {}, ctx = context(), width = 80) {
   return lines(tool().renderResult(value, { expanded: false, isPartial: false, ...options }, theme, ctx), width).join("\n");
 }
 
+test("call summaries render duplicate names as distinct status rows without changing output", () => {
+  const value = result("42", { calls: [
+    { name: "read", args: '{"path":"A"}', status: "ok", durationMs: 12 },
+    { name: "read", args: '{"path":"B"}', status: "error", durationMs: 3, error: "denied\nreason" },
+    { name: "bash", args: '{"command":"not executed"}', status: "cancelled", durationMs: 4 },
+  ], durationMs: 20 });
+  const snapshot = structuredClone(value);
+  const collapsed = render(value);
+  assert.match(collapsed, /✓ read \{"path":"A"\} 12ms\n✗ read \{"path":"B"\} 3ms\n⊘ bash/);
+  assert.doesNotMatch(collapsed, /denied/);
+  const expanded = render(value, { expanded: true });
+  assert.match(expanded, /denied\n    reason/);
+  assert.ok(expanded.endsWith("Took 0.0s"));
+  assert.match(expanded, /\n42\n/);
+  assert.deepEqual(value, snapshot);
+});
+
+test("collapsed calls show the last eight in bounded rows, expanded shows all retained previews", () => {
+  const value = result("", { calls: Array.from({ length: 12 }, (_, i) => ({
+    name: `host_${i}`, args: JSON.stringify({ path: "한😀".repeat(200) }), status: "ok", durationMs: 2,
+  })) });
+  const collapsed = render(value);
+  assert.match(collapsed, /4 earlier calls/);
+  assert.doesNotMatch(collapsed, /✓ host_0 /);
+  assert.match(collapsed, /✓ host_4 /);
+  assert.match(collapsed, /✓ host_11 /);
+  assert.equal(collapsed.split("\n").length, 10);
+  const expanded = render(value, { expanded: true });
+  assert.match(expanded, /✓ host_0 /);
+  assert.doesNotMatch(expanded, /earlier calls/);
+  assert.ok(expanded.length > collapsed.length);
+  for (const width of [5, 12, 24, 80]) {
+    assert.ok(render(value, {}, context(), width).split("\n").length <= 10);
+    render(value, { expanded: true }, context(), width);
+  }
+});
+
+test("partial rows show running calls and elapsed time, legacy rows never infer success", () => {
+  const value = result("stale output", { calls: [{ name: "read", args: '{"path":"A"}', status: "running" }] });
+  const ctx = context({ state: { startedAt: Date.now() } });
+  const text = render(value, { isPartial: true }, ctx);
+  assert.match(text, /… read/);
+  assert.match(text, /Elapsed/);
+  assert.doesNotMatch(text, /stale output|Took/);
+  assert.equal(render(result("legacy", { toolCalls: [{ name: "read" }] })), "\nlegacy");
+  assert.match(render(result("", { calls: [{ name: "old", args: "{}" }] })), /\? old/);
+  assert.match(render(result("", { calls: [null, { name: "old", status: "constructor" }] })), /\? old/);
+});
+
 test("native-style duration is concise for short and long runs", () => {
   for (const [ms, expected] of [[0, "0.0s"], [42, "0.0s"], [1234, "1.2s"], [59000, "59.0s"], [60000, "1m 0s"], [3661000, "1h 1m 1s"]]) {
     assert.equal(formatDuration(ms), expected);

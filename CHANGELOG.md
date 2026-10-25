@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Improvements
+
+- Show live, per-attempt host-call rows with bounded argument/error previews,
+  status and duration. Preserve duplicate names, settle cancellation after host
+  cleanup, and retain detached records for restored sessions.
+
 ### Fixes
 
 - Distinguish invalid script syntax (`SourceSyntaxError`) and unexpected

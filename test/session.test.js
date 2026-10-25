@@ -22,6 +22,7 @@ test("isolated real Pi SDK session", { skip: !sdk && "set PI_OPENCODE_SDK to a l
   const dir = await mkdtemp(join(tmpdir(), "pi-opencode-session-"));
   const state = { finished: 0, aborted: 0, settled: 0, starts: 0, echoRuns: 0, deniedRuns: 0 };
   const hooks = [];
+  const callUpdates = [];
   const names = ["codemode", "codemode_o", "safe_echo", "safe_slow", "safe_denied"];
   let session;
   try {
@@ -58,6 +59,9 @@ test("isolated real Pi SDK session", { skip: !sdk && "set PI_OPENCODE_SDK to a l
         });
         for (const type of ["tool_execution_start", "tool_execution_end"]) api.on(type, (event) => {
           hooks.push({ type, name: event.toolName, parent: event.parentToolCallId });
+        });
+        api.on("tool_execution_update", (event) => {
+          if (event.toolName === "codemode_o") callUpdates.push({ id: event.toolCallId, calls: event.partialResult?.details?.calls });
         });
         api.on("tool_call", (event) => {
           hooks.push({ type: "call", name: event.toolName, parent: event.parentToolCallId });
@@ -169,6 +173,8 @@ test("isolated real Pi SDK session", { skip: !sdk && "set PI_OPENCODE_SDK to a l
       assert.equal(denied.isError, true);
       assert.match(denied.content[0].text, /permission denied/);
       assert.equal(state.deniedRuns, 0);
+      assert.equal(denied.details.calls[0].status, "error");
+      assert.match(denied.details.calls[0].error, /permission denied/);
       const hidden = await run('return await tools.codemode({code: "return 1"});');
       assert.equal(hidden.isError, true);
     });
@@ -225,11 +231,20 @@ test("isolated real Pi SDK session", { skip: !sdk && "set PI_OPENCODE_SDK to a l
       await delay(200);
       assert.equal(state.finished, 0);
     });
-    await t.test("normal parallel calls still succeed", async () => {
-      const result = await run('return await Promise.all([tools.safe_slow({ms: 5}), tools.safe_slow({ms: 5})]);');
+    await t.test("normal parallel calls publish live rows and persist metadata without changing source", async () => {
+      const code = 'return await Promise.all([tools.safe_slow({ms: 5}), tools.safe_slow({ms: 5})]);';
+      const result = await run(code);
       assert.equal(result.content[0].text, '["slow","slow"]');
       assert.equal(result.nestedCalls.complete, true);
       assert.ok(result.nestedCalls.calls.every((call) => call.status === "ok"));
+      assert.equal(result.details.calls.length, 2);
+      assert.ok(result.details.calls.every((call) => call.name === "safe_slow" && call.status === "ok" && call.durationMs >= 0));
+      assert.deepEqual(result.details.calls.map((call) => JSON.parse(call.args)), [{ ms: 5 }, { ms: 5 }]);
+      const updates = callUpdates.filter((update) => update.id === result.toolCallId);
+      assert.ok(updates.some((update) => update.calls?.length === 2 && update.calls.every((call) => call.status === "running")));
+      assert.ok(updates.some((update) => update.calls?.length === 2 && update.calls.every((call) => call.status === "ok")));
+      const message = session.messages.find((entry) => entry.role === "assistant" && entry.content.some((block) => block.type === "toolCall" && block.id === result.toolCallId));
+      assert.equal(message.content.find((block) => block.type === "toolCall").arguments.code, code);
     });
     await t.test("warnings and truncation reach the actual transcript", async () => {
       const warning = await run('Promise.reject(new Error("denied")); return "done";');
@@ -252,6 +267,7 @@ test("isolated real Pi SDK session", { skip: !sdk && "set PI_OPENCODE_SDK to a l
       assert.match(result.content[0].text, /TimeoutExceeded/);
       assert.equal(state.aborted, aborted + 1);
       assert.equal(state.settled, state.starts);
+      assert.equal(result.details.calls[0].status, "cancelled");
       assert.equal(result.nestedCalls.complete, true);
       assert.notEqual(result.nestedCalls.calls[0].status, "unfinished");
       await delay(850);

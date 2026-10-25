@@ -3,6 +3,7 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { PREFLIGHT_LIMITS, checkOpenCodeCompatibility } from "./route.js";
 import { openCodeRenderers } from "./renderer.js";
+import { createCallLog } from "./call-log.js";
 
 const TOOL_NAME = "codemode_o";
 // Pi's built-in `codemode` stays registered. Guest programs cannot call either code tool.
@@ -47,7 +48,7 @@ async function callPiTool(ctx, name, input, signal) {
   return textOf(outcome?.result);
 }
 
-function codeModeTools(ctx, signal) {
+function codeModeTools(ctx, signal, calls) {
   const tools = {};
   for (const tool of ctx?.tools ?? []) {
     const name = tool?.name;
@@ -61,7 +62,7 @@ function codeModeTools(ctx, signal) {
         return Effect.ensuring(Effect.tryPromise({
           try: (interruption) => {
             const combined = signal ? AbortSignal.any([signal, interruption]) : interruption;
-            pending = callPiTool(ctx, name, input, combined);
+            pending = calls.run(name, input, combined, () => callPiTool(ctx, name, input, combined));
             return pending;
           },
           catch: (error) => toolError(message(error)),
@@ -192,8 +193,9 @@ export function createOpenCodeModeExtension({ parseSource } = {}) {
         }
         return { descriptions: { [TOOL_NAME]: `${BASE}\nCallable tools: ${names.join(", ") || "(none)"}` } };
       },
-      async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+      async execute(_toolCallId, params, signal, onUpdate, ctx) {
         const startedAt = performance.now();
+        const calls = createCallLog(onUpdate, LIMITS.maxToolCalls);
         const code = typeof params?.code === "string" ? params.code : "";
         const preflight = checkOpenCodeCompatibility(code, parseSource);
         // Legacy metadata only, not a dispatch decision. No native tool is executed here.
@@ -203,7 +205,7 @@ export function createOpenCodeModeExtension({ parseSource } = {}) {
         });
         const finish = (result) => ({
           ...result,
-          details: { ...result.details, preflight, route, durationMs: performance.now() - startedAt },
+          details: { ...result.details, calls: calls.snapshot(), preflight, route, durationMs: performance.now() - startedAt },
         });
         if (!preflight.supported) {
           // Built-in codemode is model-only: do not bypass Pi's invocation boundary.
@@ -213,8 +215,9 @@ export function createOpenCodeModeExtension({ parseSource } = {}) {
             toolCalls: [],
           }));
         }
+        calls.publish();
         try {
-          const runtime = CodeMode.make({ tools: codeModeTools(ctx, signal), limits: LIMITS });
+          const runtime = CodeMode.make({ tools: codeModeTools(ctx, signal, calls), limits: LIMITS });
           const result = await Effect.runPromise(runtime.execute(code), signal ? { signal } : undefined);
           return finish(renderResult(result));
         } catch (error) {

@@ -24,7 +24,7 @@ npm test
 
 After dependencies are installed, the tests do not install SDKs or use model
 APIs. Without `PI_OPENCODE_SDK`, the session suite explicitly skips: the current
-result is **49 passed, 1 skipped**. The boundary tests include literal 30-second
+result is **59 passed, 1 skipped**. The boundary tests include literal 30-second
 timeout and delayed-cleanup probes, so the suite takes at least 30 seconds.
 
 ## Full suite with an existing SDK
@@ -35,7 +35,7 @@ To use the SDK installed by `npm ci`:
 PI_OPENCODE_SDK="$PWD/node_modules/@earendil-works/pi-coding-agent" npm test
 ```
 
-Expected result: **59 passed, 0 skipped**, including the SDK suite's parent and
+Expected result: **69 passed, 0 skipped**, including the SDK suite's parent and
 nine subtests. To run only the session suite:
 
 ```sh
@@ -128,6 +128,10 @@ those advisories. Keep the host installation updated independently.
   cooperative host cleanup, including Pi hooks and completed nested-call audits.
 - Output: final UTF-8/JSON-escaping bounds, Unicode, logs, huge errors, visible
   warnings, structured diagnostic budgets, and incomplete-preview indicators.
+- Host-call presentation: live detached snapshots, invocation ordering with
+  duplicate names, handled failures, cleanup-aware cancellation, bounded previews
+  without result retention, and observers that cannot change tool behavior. Real
+  SDK sessions check live updates and stored call metadata/source preservation.
 - TUI: highlighted source, visual-line collapse/expansion, narrow Unicode output,
   whitespace, duration, legacy/partial results, and component reuse/invalidation.
   Native parity compares shared ordinary/expanded output; older native renderers

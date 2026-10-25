@@ -1,8 +1,13 @@
 import { highlightCode, keyHint } from "@earendil-works/pi-coding-agent";
-import { Container, Spacer, Text, truncateToWidth } from "@earendil-works/pi-tui";
+import { Container, Spacer, Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 const CODE_PREVIEW_LINES = 10;
 const OUTPUT_PREVIEW_LINES = 5;
+const CALL_PREVIEW_COUNT = 8;
+const CALL_STATES = new Map([
+  ["running", ["…", "warning"]], ["ok", ["✓", "success"]],
+  ["error", ["✗", "error"]], ["cancelled", ["⊘", "muted"]],
+]);
 
 // Match native Pi's row timer: seconds, then minutes/hours for longer runs.
 export function formatDuration(ms) {
@@ -38,6 +43,44 @@ function finiteDuration(value) {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
+class CallList {
+  constructor(calls, expanded, theme) {
+    this.calls = calls;
+    this.expanded = expanded;
+    this.theme = theme;
+  }
+  render(width) {
+    const { expanded, theme } = this;
+    const shown = expanded ? this.calls : this.calls.slice(-CALL_PREVIEW_COUNT);
+    const lines = [];
+    if (shown.length < this.calls.length) {
+      lines.push(truncateToWidth(theme.fg("muted", `... (${this.calls.length - shown.length} earlier calls, `) +
+        keyHint("app.tools.expand", "to expand") + theme.fg("muted", ")"), width, "…"));
+    }
+    for (const call of shown) {
+      const [icon, color] = CALL_STATES.get(call.status) ?? ["?", "muted"];
+      const name = String(call.name ?? "unknown").replace(/[\r\n\t]/g, " ");
+      const title = theme.fg(color, icon) + " " + theme.fg("toolTitle", name);
+      const duration = finiteDuration(call.durationMs) ?
+        theme.fg("dim", ` ${call.durationMs < 1000 ? `${Math.round(call.durationMs)}ms` : formatDuration(call.durationMs)}`) : "";
+      let args = typeof call.args === "string" ? call.args : "";
+      if (!expanded) args = truncateToWidth(args.replace(/\r/g, "\\r").replace(/\n/g, "\\n").replace(/\t/g, "\\t"),
+        Math.max(0, width - visibleWidth(title) - visibleWidth(duration) - 1), "…");
+      const line = title + (args ? " " + theme.fg("muted", args) : "") + duration;
+      if (expanded) {
+        lines.push(...new Text(line, 0, 0).render(width));
+        if (typeof call.error === "string" && call.error) {
+          lines.push(...new Text(theme.fg("error", "    " + call.error.replace(/\n/g, "\n    ")), 0, 0).render(width));
+        }
+      } else {
+        lines.push(truncateToWidth(line, width, "…"));
+      }
+    }
+    return lines;
+  }
+  invalidate() {}
+}
+
 export const openCodeRenderers = {
   renderCall(args, theme, context) {
     const state = context.state;
@@ -57,6 +100,11 @@ export const openCodeRenderers = {
   renderResult(result, { expanded, isPartial }, theme, context) {
     const component = context.lastComponent ?? new Container();
     component.clear();
+    const calls = Array.isArray(result.details?.calls) ? result.details.calls.filter((call) => call && typeof call === "object") : [];
+    if (calls.length) {
+      component.addChild(new Spacer(1));
+      component.addChild(new CallList(calls, expanded, theme));
+    }
     if (!isPartial) {
       // Old sessions and hook-replaced results may not have our details. Render
       // their content as-is; never reconstruct output from diagnostic metadata.
