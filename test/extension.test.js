@@ -27,7 +27,7 @@ test("package is one OpenCode-backed pi extension", () => {
   const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
   assert.deepEqual(pkg.pi.extensions, ["./index.js"]);
   assert.deepEqual(Object.keys(pkg.dependencies).sort(), ["@opencode/codemode", "acorn", "effect"]);
-  assert.equal(pkg.dependencies["@opencode/codemode"], "2.1.0");
+  assert.equal(pkg.dependencies["@opencode/codemode"], "2.1.4");
 });
 
 test("registration supplies conditional preference without routing or prompt hooks", () => {

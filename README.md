@@ -2,7 +2,7 @@
 
 A small Pi extension that leaves native `codemode` in place and lets you choose OpenCode CodeMode too.
 
-It registers **`codemode_o`**, backed by `@opencode/codemode` 2.1.0: another execution option for short, self-contained JavaScript-like programs that call Pi tools. Host calls retain Pi's validation, permission/result hooks, and nested-call audit; cancellation waits for host cleanup, and output keeps bounded, visible diagnostics.
+It registers **`codemode_o`**, backed by `@opencode/codemode` 2.1.4: another execution option for short, self-contained JavaScript-like programs that call Pi tools. Host calls retain Pi's validation, permission/result hooks, and nested-call audit; cancellation waits for host cleanup, and output keeps bounded, visible diagnostics.
 
 Short programs can be quick: see the [benchmark snapshot](#benchmark-snapshot) for measured comparisons with native `codemode`. Both can batch tool calls; this extension lets you use the OpenCode interpreter in Pi without replacing the native tool. Performance depends on the workload, and lower latency does not imply stronger isolation. You choose the tool: preflight can reject an unsuitable OpenCode program, but never switches tools or falls back automatically.
 

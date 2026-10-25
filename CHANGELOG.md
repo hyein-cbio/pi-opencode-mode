@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Use `@opencode/codemode` 2.1.4. Upstream promise scheduling now holds the
+  main job until leftover promise work is interrupted; the extension's tool
+  bridge, limits, and result contract are unchanged. Acorn stays 8.15.0 and
+  Effect stays 4.0.1.
+
 ## 0.1.3 — 2026-10-25
 
 ### Improvements
