@@ -235,7 +235,8 @@ and incomplete-output indicators remain visible above collapsed data.
   two-space indentation. It preserves literal/comment/template contents and
   checks the parsed structure after formatting. Invalid, incomplete, oversized,
   or too-complex input falls back to the original source without repair. A label
-  identifies formatted previews; expansion shows both the formatted view and
+  above the source reads `Preview; expand for original`; expansion shows
+  both the formatted view and
   the original source used for execution, storage, and error positions. No
   whole-system prompt change, formatter dependency, or input rewriting is used.
 - **One row per host-call attempt.** Repeated names remain separate rows in

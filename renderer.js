@@ -98,7 +98,7 @@ export const openCodeRenderers = {
       const formatted = state.sourcePreview.formatted;
       const changed = formatted !== code;
       const highlight = (source) => highlightCode(source.trimEnd().replace(/\t/g, "   "), "javascript").join("\n");
-      if (changed) component.addChild(new Text(theme.fg("muted", "Formatted preview (display only; expand for original)"), 0, 0));
+      if (changed) component.addChild(new Text(theme.fg("muted", "Preview; expand for original"), 0, 0));
       component.addChild(outputComponent(highlight(formatted), CODE_PREVIEW_LINES, context.expanded, theme));
       if (changed && context.expanded) {
         component.addChild(new Spacer(1));

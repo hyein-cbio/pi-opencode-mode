@@ -38,17 +38,33 @@ test("formatted source preview separates calls and expansion retains execution s
   const snapshot = structuredClone(args);
   const ctx = context();
   const collapsed = lines(definition.renderCall(args, theme, ctx), 160).join("\n");
-  assert.match(collapsed, /Formatted preview \(display only/);
+  assert.match(collapsed, /^codemode_o \(OpenCode\)\nPreview; expand for original\n/);
   assert.match(collapsed, /\n  tools.read\(\{path:"A"\}\),\n  tools.read\(\{path:"B"\}\),\n  tools.bash/);
   assert.doesNotMatch(collapsed, /Original source \(/);
   const cached = ctx.state.sourcePreview;
   const expanded = lines(definition.renderCall(args, theme, { ...ctx, expanded: true }), 240).join("\n");
   assert.match(expanded, /Original source \(execution and error locations\)/);
   assert.ok(expanded.endsWith(code));
+  assert.match(expanded, /^codemode_o \(OpenCode\)\nPreview; expand for original\n/);
   assert.equal(ctx.state.sourcePreview, cached, "layout is cached separately from theme styling");
   assert.deepEqual(args, snapshot, "formatting never changes execution or stored arguments");
   definition.renderCall({ code: "return 42;" }, theme, ctx);
   assert.equal(ctx.state.sourcePreview.code, "return 42;");
+});
+
+test("concise preview notice stays above the source when collapsed and expanded", () => {
+  const definition = tool();
+  const code = "return [" + Array.from({ length: 12 }, (_, i) => `tools.read({path:"file_${i}"})`).join(",") + "];";
+  const ctx = context();
+  const component = definition.renderCall({ code }, theme, ctx);
+  const text = lines(component, 120).join("\n");
+  assert.match(text, /^codemode_o \(OpenCode\)\nPreview; expand for original\nreturn \[\n  tools.read/);
+  assert.match(text, /more lines,.*to expand\)$/);
+  for (const width of [12, 24, 80]) lines(component, width);
+  const expanded = lines(definition.renderCall({ code }, theme, { ...ctx, expanded: true, lastComponent: component }), 120).join("\n");
+  assert.doesNotMatch(expanded, /more lines|to expand|Formatted preview|display only/);
+  assert.match(expanded, /^codemode_o \(OpenCode\)\nPreview; expand for original\nreturn \[/);
+  assert.ok(expanded.indexOf("Original source") > expanded.indexOf('tools.read({path:"file_11"})'));
 });
 
 test("invalid and incomplete source render unformatted without escaping repair", () => {
@@ -57,7 +73,7 @@ test("invalid and incomplete source render unformatted without escaping repair",
     const args = { code };
     const ctx = context();
     const text = lines(definition.renderCall(args, theme, ctx)).join("\n");
-    assert.doesNotMatch(text, /Formatted preview/);
+    assert.doesNotMatch(text, /Preview; expand for original/);
     assert.equal(ctx.state.sourcePreview.formatted, code);
     assert.equal(args.code, code);
   }
