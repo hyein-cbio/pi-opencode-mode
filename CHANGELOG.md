@@ -7,6 +7,9 @@
 - Show live, per-attempt host-call rows with bounded argument/error previews,
   status and duration. Preserve duplicate names, settle cancellation after host
   cleanup, and retain detached records for restored sessions.
+- Format source previews at AST boundaries without changing execution input;
+  preserve literals/comments/templates and fall back to raw source on parse or
+  structure-check failure. Expansion also exposes the original execution source.
 
 ### Fixes
 

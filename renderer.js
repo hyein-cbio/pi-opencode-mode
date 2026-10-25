@@ -1,5 +1,6 @@
 import { highlightCode, keyHint } from "@earendil-works/pi-coding-agent";
 import { Container, Spacer, Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { formatSourcePreview } from "./source-preview.js";
 
 const CODE_PREVIEW_LINES = 10;
 const OUTPUT_PREVIEW_LINES = 5;
@@ -91,9 +92,19 @@ export const openCodeRenderers = {
     const code = args?.code;
     component.addChild(new Text(typeof code === "string" ? title : `${title} ${theme.fg("error", "[invalid arg]")}`, 0, 0));
     if (typeof code === "string" && code.trim()) {
-      const normalized = code.replace(/\r/g, "").trimEnd().replace(/\t/g, "   ");
-      const highlighted = highlightCode(normalized, "javascript").join("\n");
-      component.addChild(outputComponent(highlighted, CODE_PREVIEW_LINES, context.expanded, theme));
+      // Cache only unstyled source layout; repaint highlighting with the current
+      // theme, and never send the formatted copy to preflight or execution.
+      if (state.sourcePreview?.code !== code) state.sourcePreview = { code, formatted: formatSourcePreview(code) };
+      const formatted = state.sourcePreview.formatted;
+      const changed = formatted !== code;
+      const highlight = (source) => highlightCode(source.trimEnd().replace(/\t/g, "   "), "javascript").join("\n");
+      if (changed) component.addChild(new Text(theme.fg("muted", "Formatted preview (display only; expand for original)"), 0, 0));
+      component.addChild(outputComponent(highlight(formatted), CODE_PREVIEW_LINES, context.expanded, theme));
+      if (changed && context.expanded) {
+        component.addChild(new Spacer(1));
+        component.addChild(new Text(theme.fg("muted", "Original source (execution and error locations)"), 0, 0));
+        component.addChild(new Text(highlight(code), 0, 0));
+      }
     }
     return component;
   },

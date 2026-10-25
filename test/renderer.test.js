@@ -31,6 +31,38 @@ function render(value, options = {}, ctx = context(), width = 80) {
   return lines(tool().renderResult(value, { expanded: false, isPartial: false, ...options }, theme, ctx), width).join("\n");
 }
 
+test("formatted source preview separates calls and expansion retains execution source", () => {
+  const definition = tool();
+  const code = 'const r = await Promise.allSettled([tools.read({path:"A"}),tools.read({path:"B"}),tools.bash({command:"not executed"})]); for(let i=0;i<r.length;i++){console.log(r[i]);}';
+  const args = { code };
+  const snapshot = structuredClone(args);
+  const ctx = context();
+  const collapsed = lines(definition.renderCall(args, theme, ctx), 160).join("\n");
+  assert.match(collapsed, /Formatted preview \(display only/);
+  assert.match(collapsed, /\n  tools.read\(\{path:"A"\}\),\n  tools.read\(\{path:"B"\}\),\n  tools.bash/);
+  assert.doesNotMatch(collapsed, /Original source \(/);
+  const cached = ctx.state.sourcePreview;
+  const expanded = lines(definition.renderCall(args, theme, { ...ctx, expanded: true }), 240).join("\n");
+  assert.match(expanded, /Original source \(execution and error locations\)/);
+  assert.ok(expanded.endsWith(code));
+  assert.equal(ctx.state.sourcePreview, cached, "layout is cached separately from theme styling");
+  assert.deepEqual(args, snapshot, "formatting never changes execution or stored arguments");
+  definition.renderCall({ code: "return 42;" }, theme, ctx);
+  assert.equal(ctx.state.sourcePreview.code, "return 42;");
+});
+
+test("invalid and incomplete source render unformatted without escaping repair", () => {
+  const definition = tool();
+  for (const code of ['return "\n";', 'await tools.read({']) {
+    const args = { code };
+    const ctx = context();
+    const text = lines(definition.renderCall(args, theme, ctx)).join("\n");
+    assert.doesNotMatch(text, /Formatted preview/);
+    assert.equal(ctx.state.sourcePreview.formatted, code);
+    assert.equal(args.code, code);
+  }
+});
+
 test("call summaries render duplicate names as distinct status rows without changing output", () => {
   const value = result("42", { calls: [
     { name: "read", args: '{"path":"A"}', status: "ok", durationMs: 12 },
@@ -78,6 +110,24 @@ test("partial rows show running calls and elapsed time, legacy rows never infer 
   assert.equal(render(result("legacy", { toolCalls: [{ name: "read" }] })), "\nlegacy");
   assert.match(render(result("", { calls: [{ name: "old", args: "{}" }] })), /\? old/);
   assert.match(render(result("", { calls: [null, { name: "old", status: "constructor" }] })), /\? old/);
+});
+
+test("formatted and call-list components repaint for resize, expansion and theme changes", () => {
+  const definition = tool();
+  const args = { code: 'const r=[tools.read({path:"한😀"}),tools.read({path:"B"})]; return r;' };
+  const ctx = context();
+  const source = definition.renderCall(args, theme, ctx);
+  for (const width of [12, 24, 80]) lines(source, width);
+  const newTheme = { ...theme, fg(_color, value) { return `[${value}]`; } };
+  const next = definition.renderCall(args, newTheme, { ...ctx, expanded: true, lastComponent: source });
+  assert.equal(next, source);
+  next.invalidate();
+  assert.match(lines(next, 80).join("\n"), /\[Original source/);
+  const value = result("", { calls: [{ name: "read", args: "{}", status: "ok", durationMs: 1 }] });
+  const rows = definition.renderResult(value, { expanded: false, isPartial: false }, theme, context());
+  const updated = definition.renderResult(value, { expanded: true, isPartial: false }, newTheme, context({ lastComponent: rows }));
+  updated.invalidate();
+  assert.match(lines(updated).join("\n"), /\[✓\]/);
 });
 
 test("native-style duration is concise for short and long runs", () => {

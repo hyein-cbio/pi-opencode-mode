@@ -230,6 +230,14 @@ muted `Took 0.1s` footer. Use Pi's configured tool-expansion shortcut for detail
 Limits count wrapped terminal lines, including long JSON and Unicode. Warnings
 and incomplete-output indicators remain visible above collapsed data.
 
+- **Readable source, unchanged execution.** A display-only layout pass separates
+  multi-element arrays (including batched tool calls) and block statements with
+  two-space indentation. It preserves literal/comment/template contents and
+  checks the parsed structure after formatting. Invalid, incomplete, oversized,
+  or too-complex input falls back to the original source without repair. A label
+  identifies formatted previews; expansion shows both the formatted view and
+  the original source used for execution, storage, and error positions. No
+  whole-system prompt change, formatter dependency, or input rewriting is used.
 - **One row per host-call attempt.** Repeated names remain separate rows in
   invocation order, with `…` running, `✓` success, `✗` error, and `⊘` cancelled,
   argument previews and elapsed time. Permission/schema failures are attempts,
