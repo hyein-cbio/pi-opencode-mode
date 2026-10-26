@@ -38,10 +38,11 @@ test("registration supplies conditional preference without routing or prompt hoo
   const guidelines = tool.promptGuidelines.join("\n");
   assert.ok(guidelines.length <= 600, "keep model guidance concise");
   assert.match(guidelines, /Choose from task context/);
-  assert.match(guidelines, /Prefer codemode_o for short, self-contained programs within its syntax\/limits/);
+  assert.match(guidelines, /Prefer codemode_o for short, self-contained programs within its syntax\/limits, including tools\.bash and tools\.edit/);
   assert.match(guidelines, /Call either tool directly \(model-only\)/);
   assert.match(guidelines, /Use native codemode upfront/);
-  assert.match(guidelines, /Pi globals\/@options\/models, images, MCP \(readiness\), long-running work, or uncertain compatibility/);
+  assert.match(guidelines, /Pi globals\/@options\/models, images, MCP \(readiness\), or work past these limits/);
+  assert.match(guidelines, /A bash or edit call alone stays here/);
   assert.match(guidelines, /Preflight validates, never routes/);
   assert.match(guidelines, /NativeCodemodeRequired means no source ran/);
   assert.match(guidelines, /use native if active, otherwise report it is needed/);
@@ -51,9 +52,32 @@ test("registration supplies conditional preference without routing or prompt hoo
   assert.ok(tool.promptSnippet && !tool.promptSnippet.includes("\n"));
   for (const description of [tool.description, tool.prepareLoadout({ callable: [] }).descriptions.codemode_o]) {
     assert.match(description, /Prefer codemode_o for short, self-contained programs/);
+    assert.match(description, /await tools\.bash\(\{ \.\.\. \}\) and await tools\.edit\(\{ \.\.\. \}\)/);
+    assert.match(description, /including bash and edit/);
     assert.match(description, /native codemode directly only if active/);
     assert.match(description, /Never automatically replay after an execution failure/);
   }
+});
+
+test("native bash and edit calls run as ordinary host tools", async () => {
+  const calls = [];
+  const result = await registeredTool().execute("bash-edit", {
+    code: 'const listed = await tools.bash({ command: "git status --short" }); await tools.edit({ path: "README.md", edits: [{ oldText: "a", newText: "b" }] }); return listed;',
+  }, undefined, undefined, {
+    tools: ["bash", "edit"].map((name) => ({ name, parameters: { type: "object" } })),
+    async executeTool(name, args) {
+      calls.push({ name, args });
+      return { result: { content: [{ type: "text", text: name === "bash" ? " M README.md\n" : "edited" }] } };
+    },
+  });
+  assert.equal(result.isError, undefined);
+  assert.equal(result.details.ok, true);
+  assert.equal(result.details.preflight.supported, true);
+  assert.equal(JSON.parse(result.content[0].text), " M README.md\n");
+  assert.deepEqual(calls, [
+    { name: "bash", args: { command: "git status --short" } },
+    { name: "edit", args: { path: "README.md", edits: [{ oldText: "a", newText: "b" }] } },
+  ]);
 });
 
 test("runs a fresh confined program and calls one pi tool", async () => {

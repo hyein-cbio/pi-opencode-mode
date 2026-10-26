@@ -12,10 +12,10 @@ const LIMITS = { timeoutMs: 30_000, maxToolCalls: 64, maxOutputBytes: 65_536 };
 const BASE = [
   "Confined OpenCode CodeMode v2, not Pi's QuickJS codemode. Prefer codemode_o for short, self-contained programs known to fit its supported syntax and limits.",
   "Write a JavaScript-like program. Use return, or a final expression. undefined becomes null.",
-  `Only short supported programs (at most ${PREFLIGHT_LIMITS.maxSourceBytes} UTF-8 source bytes and ${PREFLIGHT_LIMITS.maxLines} lines) run here. Choose active native Pi codemode upfront for longer/uncertain syntax, long-running work, @options, text/image/exit, store/load, discovery globals, models, image workflows, or MCP tools (readiness is not coordinated here). Native-required programs are rejected BEFORE execution; invoke native codemode directly only if active, otherwise report that it is needed. Never automatically replay after an execution failure.`,
+  `Only short supported programs (at most ${PREFLIGHT_LIMITS.maxSourceBytes} UTF-8 source bytes and ${PREFLIGHT_LIMITS.maxLines} lines) run here. Native bash and edit stay here: await tools.bash({ ... }) and await tools.edit({ ... }). Choose active native Pi codemode upfront for longer/uncertain syntax, work past this time or call budget, @options, text/image/exit, store/load, discovery globals, models, image workflows, or MCP tools (readiness is not coordinated here). Native-required programs are rejected BEFORE execution; invoke native codemode directly only if active, otherwise report that it is needed. Never automatically replay after an execution failure.`,
   "Call pi tools that are already callable as await tools.<name>({ ... }).",
   'Inspect unfamiliar tool arguments with synchronous search({ query: "tools.read", limit: 1 }). It returns items with path, description, and signature, plus remaining and next for pagination. This OpenCode global only lists already-callable tools, does not activate tools, and counts toward the tool-call limit.',
-  "No import, process, require, eval, Function, filesystem, network, or timers except through those tools.",
+  "No import, process, require, eval, Function, or timers. Shell, filesystem, and network access go through already-callable tools, including bash and edit.",
   `Each run is fresh. Limits: ${LIMITS.timeoutMs}ms before interruption (host cleanup is awaited), ${LIMITS.maxToolCalls} tool calls, ${LIMITS.maxOutputBytes} final UTF-8 text bytes including logs and diagnostics.`,
   "Warnings and truncation are visible; truncated data is a preview, not complete JSON. Host cancellation requires cooperative tools.",
   "SourceSyntaxError means fix the JS source before running it; PreflightParserError means the preflight parser failed. Neither recommends replaying the same source in native codemode.",
@@ -176,8 +176,8 @@ export function createOpenCodeModeExtension({ parseSource } = {}) {
       description: BASE,
       promptSnippet: "Run confined OpenCode CodeMode that calls other pi tools",
       promptGuidelines: [
-        "Choose from task context. Prefer codemode_o for short, self-contained programs within its syntax/limits. Call either tool directly (model-only).",
-        "Use native codemode upfront for Pi globals/@options/models, images, MCP (readiness), long-running work, or uncertain compatibility.",
+        "Choose from task context. Prefer codemode_o for short, self-contained programs within its syntax/limits, including tools.bash and tools.edit. Call either tool directly (model-only).",
+        "Use native codemode upfront for Pi globals/@options/models, images, MCP (readiness), or work past these limits. A bash or edit call alone stays here.",
         "Preflight validates, never routes. NativeCodemodeRequired means no source ran: use native if active, otherwise report it is needed. Never automatically replay execution failures; effects are not rolled back.",
       ],
       parameters: Type.Object({

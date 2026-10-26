@@ -139,13 +139,13 @@ HEAD alone does not, because that measurement used a dirty benchmark checkout.
 
 ## When to choose which tool
 
-Prefer `codemode_o` over native `codemode` for short, self-contained programs known to fit its supported syntax and limits. This includes batching already-callable non-MCP tools and returning compact text or JSON. You can also reuse short OpenCode programs, adapting host-tool names and arguments to Pi's current catalog.
+Prefer `codemode_o` over native `codemode` for short, self-contained programs known to fit its supported syntax and limits. This includes batching already-callable non-MCP tools and returning compact text or JSON. Native `bash` and `edit` are ordinary calls in that set: `await tools.bash({ ... })` and `await tools.edit({ ... })`. A shell command or file edit is not, by itself, a reason to choose native `codemode`. You can also reuse short OpenCode programs, adapting host-tool names and arguments to Pi's current catalog.
 
 The extension supplies this conditional preference through the registered tool's `promptGuidelines`, which Pi adds to the default system prompt while `codemode_o` is active and declared. No `AGENTS.md` edit or whole-system-prompt replacement is needed. This is model guidance, not a forced router or a performance guarantee; higher-priority instructions and custom system prompts may affect it. It does not activate tools, replace native `codemode`, or change other extensions. In particular, it does not guarantee extra edit/write diff presentation from other extensions.
 
 | Need | Choose |
 | --- | --- |
-| Short, fresh program with known supported syntax that awaits already-callable non-MCP tools and returns text/JSON | Prefer `codemode_o` |
+| Short, fresh program with known supported syntax that awaits already-callable non-MCP tools, including native `bash` and `edit`, and returns text/JSON | Prefer `codemode_o` |
 | Batch independent non-MCP tool calls or summarize results within those limits | Prefer `codemode_o`; native can also do this |
 | Pi's `text()`, `image()`, `exit()`, `store()`/`load()`, `models`, or native discovery helpers | Native `codemode` |
 | Longer or long-running programs, broader/uncertain syntax or limits, or Pi's `// @options:` controls | Native `codemode` upfront |

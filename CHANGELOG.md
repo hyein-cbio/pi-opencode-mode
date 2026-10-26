@@ -4,6 +4,10 @@
 
 ### Changed
 
+- Keep short programs that call native `bash` and `edit` on `codemode_o`.
+  Those host calls already ran through Pi's tool bridge; the tool guidance no
+  longer treats a shell command or file edit as a reason to switch to native
+  `codemode`.
 - Use `@opencode/codemode` 2.1.4. Upstream promise scheduling now holds the
   main job until leftover promise work is interrupted; the extension's tool
   bridge, limits, and result contract are unchanged. Acorn stays 8.15.0 and
