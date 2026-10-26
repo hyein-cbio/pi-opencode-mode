@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.4 — 2026-10-26
+
 ### Changed
 
 - Admit `switch`/`case` and `new Date`, `new RegExp`, `new Map`,

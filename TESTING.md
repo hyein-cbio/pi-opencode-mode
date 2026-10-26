@@ -24,7 +24,7 @@ npm test
 
 After dependencies are installed, the tests do not install SDKs or use model
 APIs. Without `PI_OPENCODE_SDK`, the session suite explicitly skips: the current
-result is **66 passed, 1 skipped**. The boundary tests include literal 30-second
+result is **77 passed, 1 skipped**. The boundary tests include literal 30-second
 timeout and delayed-cleanup probes, so the suite takes at least 30 seconds.
 
 ## Full suite with an existing SDK
@@ -35,7 +35,7 @@ To use the SDK installed by `npm ci`:
 PI_OPENCODE_SDK="$PWD/node_modules/@earendil-works/pi-coding-agent" npm test
 ```
 
-Expected result: **76 passed, 0 skipped**, including the SDK suite's parent and
+Expected result: **87 passed, 0 skipped**, including the SDK suite's parent and
 nine subtests. To run only the session suite:
 
 ```sh
@@ -190,6 +190,26 @@ verified separately by the CI run on the release commit before publication.
 the previously documented **1 moderate / 1 high** entry through the locked test
 host and undici; neither host package is bundled in the extension tarball.
 `npm pack --dry-run --json` includes only the 11 intended package files.
+
+## 0.1.4 release verification — 2026-10-26
+
+On macOS arm64 with Node **26.12.1** and CodeMode **2.1.4**, the full suite
+passed **87 tests, 0 failures, 0 skips**. Clean disposable installs also passed
+the full suite against Pi **0.99.0 / 1.3.0 / 1.4.0**, with no skips. Hosted
+Node **22.19.0 / 24.x** checks gate the release commit separately.
+
+Regression coverage keeps `for...in` rejected before runtime construction or
+earlier host effects, including inherited-property and deleted-key cases.
+`switch`/fall-through and the admitted constructors execute against the pinned
+runtime. Prompt tests name both model-only code tools explicitly and retain
+ordinary `bash`/`edit` host-call coverage. CodeRabbit reviewed the implementation
+diff with no remaining findings. No live-provider/model walkthrough or fresh
+benchmark was performed.
+
+`npm audit --omit=peer` reports **0 vulnerabilities**. Full audit retains the
+known **1 moderate / 1 high** dependency entries through the locked test host
+and undici; neither is bundled in the extension tarball. The package file list
+remains the same 11 intended files.
 
 ## Coverage
 
