@@ -85,10 +85,9 @@ test("regular expression literals stay in OpenCode without reading pattern text 
   assert.deepEqual(checkOpenCodeCompatibility("return 1n;").reasons, ["unsupported-literal"]);
 });
 
-test("switch, for-in, and CodeMode constructors stay in OpenCode", () => {
+test("switch and CodeMode constructors stay in OpenCode", () => {
   for (const code of [
     'switch (1) { case 1: return "one"; default: return "other"; }',
-    'const keys = []; for (const key in { a: 1, b: 2 }) keys.push(key); return keys;',
     'return new Date(0).toISOString();',
     'return new RegExp("a", "i").test("A");',
     'return new Map([["k", 1]]).get("k");',
@@ -106,6 +105,17 @@ test("switch, for-in, and CodeMode constructors stay in OpenCode", () => {
     'return new WeakMap();',
     'return new AggregateError([]);',
   ]) assert.equal(checkOpenCodeCompatibility(code).reasons[0], "uncertain-constructor", code);
+});
+
+test("for-in stays native while inherited and deleted-key semantics differ", () => {
+  for (const code of [
+    'const keys = []; for (const key in { a: 1 }) keys.push(key); return keys;',
+    'const obj = Object.create({ p: 1 }); obj.a = 2; const keys = []; for (const key in obj) keys.push(key); return keys;',
+    'const obj = { a: 1, b: 2, c: 3 }, keys = []; for (const key in obj) { keys.push(key); delete obj.b; } return keys;',
+  ]) {
+    assert.equal(select(code).route, "codemode", code);
+    assert.deepEqual(checkOpenCodeCompatibility(code).reasons, ["unsupported-syntax:ForInStatement"], code);
+  }
 });
 
 test("unsupported or uncertain syntax selects native without speculative execution", () => {

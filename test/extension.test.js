@@ -39,7 +39,7 @@ test("registration supplies conditional preference without routing or prompt hoo
   assert.ok(guidelines.length <= 600, "keep model guidance concise");
   assert.match(guidelines, /Choose from task context/);
   assert.match(guidelines, /Prefer codemode_o for short, self-contained programs within its syntax\/limits, including tools\.bash and tools\.edit/);
-  assert.match(guidelines, /Call either tool directly \(model-only\)/);
+  assert.match(guidelines, /Call codemode_o or native codemode directly \(model-only\)/);
   assert.match(guidelines, /Use native codemode upfront/);
   assert.match(guidelines, /Pi globals\/@options\/models, images, MCP \(readiness\), or work past these limits/);
   assert.match(guidelines, /A bash or edit call alone stays here/);

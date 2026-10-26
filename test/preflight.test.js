@@ -44,13 +44,11 @@ return {summary: log.match(/ℹ (tests|pass|fail|skipped) [0-9]+/g), exits: log.
   assert.deepEqual(result.details.calls.map((call) => call.status), ["ok", "ok"]);
 });
 
-test("switch, for-in, and admitted constructors execute in the installed OpenCode runtime", async () => {
+test("switch and admitted constructors execute in the installed OpenCode runtime", async () => {
   const code = `let n = 0;
 switch (1) { case 1: n += 1; case 2: n += 10; break; default: n += 100; }
-const keys = [];
-for (const key in { b: 1, a: 2 }) keys.push(key);
 return {
-  n, keys,
+  n,
   date: new Date(0).toISOString(),
   matched: new RegExp("a", "i").test("A"),
   value: new Map([["k", 7]]).get("k"),
@@ -64,7 +62,6 @@ return {
   assert.equal(result.details.ok, true, result.content?.[0]?.text);
   assert.deepEqual(JSON.parse(result.content[0].text), {
     n: 11,
-    keys: ["b", "a"],
     date: "1970-01-01T00:00:00.000Z",
     matched: true,
     value: 7,
@@ -73,6 +70,24 @@ return {
     evalName: "EvalError",
     uriMessage: "u",
   });
+});
+
+test("for-in is rejected before earlier host calls or runtime construction", async () => {
+  for (const source of [
+    'const keys = []; for (const key in { a: 1 }) keys.push(key); return keys;',
+    'const obj = Object.create({ p: 1 }); obj.a = 2; const keys = []; for (const key in obj) keys.push(key); return keys;',
+    'const obj = { a: 1, b: 2, c: 3 }, keys = []; for (const key in obj) { keys.push(key); delete obj.b; } return keys;',
+  ]) {
+    const params = { code: 'await tools.write({}); ' + source };
+    const original = params.code;
+    const result = await registeredTool().execute("for-in", params, undefined, undefined, forbiddenContext);
+    assert.equal(result.isError, true);
+    assert.equal(result.details.error.kind, "NativeCodemodeRequired");
+    assert.deepEqual(result.details.preflight.reasons, ["unsupported-syntax:ForInStatement"]);
+    assert.deepEqual(result.details.toolCalls, []);
+    assert.deepEqual(result.details.calls, []);
+    assert.equal(params.code, original, "no rewriting, host effects, or native delegation");
+  }
 });
 
 test("regex literal methods and flags execute in the installed OpenCode runtime", async () => {

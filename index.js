@@ -176,7 +176,7 @@ export function createOpenCodeModeExtension({ parseSource } = {}) {
       description: BASE,
       promptSnippet: "Run confined OpenCode CodeMode that calls other pi tools",
       promptGuidelines: [
-        "Choose from task context. Prefer codemode_o for short, self-contained programs within its syntax/limits, including tools.bash and tools.edit. Call either tool directly (model-only).",
+        "Choose from task context. Prefer codemode_o for short, self-contained programs within its syntax/limits, including tools.bash and tools.edit. Call codemode_o or native codemode directly (model-only).",
         "Use native codemode upfront for Pi globals/@options/models, images, MCP (readiness), or work past these limits. A bash or edit call alone stays here.",
         "Preflight validates, never routes. NativeCodemodeRequired means no source ran: use native if active, otherwise report it is needed. Never automatically replay execution failures; effects are not rolled back.",
       ],
