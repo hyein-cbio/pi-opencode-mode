@@ -44,6 +44,37 @@ return {summary: log.match(/ℹ (tests|pass|fail|skipped) [0-9]+/g), exits: log.
   assert.deepEqual(result.details.calls.map((call) => call.status), ["ok", "ok"]);
 });
 
+test("switch, for-in, and admitted constructors execute in the installed OpenCode runtime", async () => {
+  const code = `let n = 0;
+switch (1) { case 1: n += 1; case 2: n += 10; break; default: n += 100; }
+const keys = [];
+for (const key in { b: 1, a: 2 }) keys.push(key);
+return {
+  n, keys,
+  date: new Date(0).toISOString(),
+  matched: new RegExp("a", "i").test("A"),
+  value: new Map([["k", 7]]).get("k"),
+  size: new Set([1, 1, 2]).size,
+  host: new URL("https://example.com/a").hostname,
+  evalName: new EvalError("e").name,
+  uriMessage: new URIError("u").message,
+};`;
+  const result = await registeredTool().execute("supported-syntax", { code }, undefined, undefined, { tools: [] });
+  assert.equal(result.details.preflight.supported, true);
+  assert.equal(result.details.ok, true, result.content?.[0]?.text);
+  assert.deepEqual(JSON.parse(result.content[0].text), {
+    n: 11,
+    keys: ["b", "a"],
+    date: "1970-01-01T00:00:00.000Z",
+    matched: true,
+    value: 7,
+    size: 2,
+    host: "example.com",
+    evalName: "EvalError",
+    uriMessage: "u",
+  });
+});
+
 test("regex literal methods and flags execute in the installed OpenCode runtime", async () => {
   for (const [code, expected] of [
     ['return /x/.test("x");', true],

@@ -85,6 +85,29 @@ test("regular expression literals stay in OpenCode without reading pattern text 
   assert.deepEqual(checkOpenCodeCompatibility("return 1n;").reasons, ["unsupported-literal"]);
 });
 
+test("switch, for-in, and CodeMode constructors stay in OpenCode", () => {
+  for (const code of [
+    'switch (1) { case 1: return "one"; default: return "other"; }',
+    'const keys = []; for (const key in { a: 1, b: 2 }) keys.push(key); return keys;',
+    'return new Date(0).toISOString();',
+    'return new RegExp("a", "i").test("A");',
+    'return new Map([["k", 1]]).get("k");',
+    'return new Set([1, 1]).size;',
+    'return new URL("https://example.com/a").hostname;',
+    'return new EvalError("e").name;',
+    'return new URIError("u").message;',
+  ]) {
+    assert.equal(select(code).route, "codemode_o", code);
+    assert.equal(checkOpenCodeCompatibility(code).supported, true, code);
+  }
+  for (const code of [
+    'return new Promise(() => {});',
+    'return new URLSearchParams();',
+    'return new WeakMap();',
+    'return new AggregateError([]);',
+  ]) assert.equal(checkOpenCodeCompatibility(code).reasons[0], "uncertain-constructor", code);
+});
+
 test("unsupported or uncertain syntax selects native without speculative execution", () => {
   for (const code of [
     'return 1n;', 'class X {} return new X();',

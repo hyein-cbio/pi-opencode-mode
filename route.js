@@ -10,8 +10,9 @@ export const ROUTE_LIMITS = PREFLIGHT_LIMITS;
 // this is a static compatibility check, not routing, semantic proof, or authorization.
 const SYNTAX = new Set([
   "Program", "ExpressionStatement", "EmptyStatement", "BlockStatement", "ReturnStatement",
-  "VariableDeclaration", "VariableDeclarator", "IfStatement", "ForStatement", "ForOfStatement",
+  "VariableDeclaration", "VariableDeclarator", "IfStatement", "ForStatement", "ForInStatement", "ForOfStatement",
   "WhileStatement", "DoWhileStatement", "BreakStatement", "ContinueStatement", "ThrowStatement",
+  "SwitchStatement", "SwitchCase",
   "TryStatement", "CatchClause", "Identifier", "Literal", "ArrayExpression", "ObjectExpression",
   "Property", "SpreadElement", "RestElement", "ArrayPattern", "ObjectPattern", "AssignmentPattern",
   "BinaryExpression", "LogicalExpression", "UnaryExpression", "UpdateExpression", "AssignmentExpression",
@@ -23,7 +24,10 @@ const NATIVE_NAMES = new Set([
   "text", "image", "exit", "store", "load", "ALL_TOOLS", "searchTools", "describeTool",
   "describeNamespace", "models", "globalThis", "eval", "Function", "BigInt", "Proxy", "Reflect",
 ]);
-const CONSTRUCTORS = new Set(["Error", "TypeError", "RangeError", "SyntaxError", "ReferenceError"]);
+const CONSTRUCTORS = new Set([
+  "Error", "TypeError", "RangeError", "SyntaxError", "ReferenceError", "EvalError", "URIError",
+  "Date", "RegExp", "Map", "Set", "URL",
+]);
 
 function selected(route, reason) {
   return Object.freeze({

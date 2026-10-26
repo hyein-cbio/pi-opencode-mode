@@ -4,6 +4,10 @@
 
 ### Changed
 
+- Admit `switch`/`case`, `for...in`, and `new Date`, `new RegExp`, `new Map`,
+  `new Set`, `new URL`, `new EvalError`, and `new URIError` through preflight.
+  CodeMode 2.1.4 already runs them. Other constructors and unsupported syntax
+  stay rejected before execution.
 - Keep short programs that call native `bash` and `edit` on `codemode_o`.
   Those host calls already ran through Pi's tool bridge; the tool guidance no
   longer treats a shell command or file edit as a reason to switch to native
