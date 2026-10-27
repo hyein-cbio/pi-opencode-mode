@@ -9,6 +9,12 @@
   bridge, limits, preflight, and result contract are unchanged, including
   rejection of `for...in`.
 
+### Improvements
+
+- Nudge models to use JS template literals for multiline shell commands and
+  heredocs, with explicit guidance on embedded backticks, interpolation, and
+  backslash escaping. Source validation and execution behavior are unchanged.
+
 ## 0.1.4 — 2026-10-26
 
 ### Changed

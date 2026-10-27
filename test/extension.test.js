@@ -36,7 +36,7 @@ test("registration supplies conditional preference without routing or prompt hoo
   const source = readFileSync(new URL("../index.js", import.meta.url), "utf8");
   assert.doesNotMatch(source, /\bselectCodemodeRoute\b/, "execution must not use the legacy selector");
   const guidelines = tool.promptGuidelines.join("\n");
-  assert.ok(guidelines.length <= 600, "keep model guidance concise");
+  assert.ok(guidelines.length <= 900, "keep model guidance concise");
   assert.match(guidelines, /Choose from task context/);
   assert.match(guidelines, /Prefer codemode_o for short, self-contained programs within its syntax\/limits, including tools\.bash and tools\.edit/);
   assert.match(guidelines, /Call codemode_o or native codemode directly \(model-only\)/);
@@ -47,6 +47,9 @@ test("registration supplies conditional preference without routing or prompt hoo
   assert.match(guidelines, /NativeCodemodeRequired means no source ran/);
   assert.match(guidelines, /use native if active, otherwise report it is needed/);
   assert.match(guidelines, /Never automatically replay execution failures; effects are not rolled back/);
+  assert.ok(guidelines.includes("For multiline shell/heredoc commands, use JS template literals (backticks), not raw newlines in quoted strings"));
+  assert.ok(guidelines.includes("Escape embedded backticks, literal ${...}, and backslashes at the JS layer"));
+  assert.match(guidelines, /shell quotes do not protect JS strings/);
   assert.equal(tool.exposure, "model-only");
   assert.equal(tool.defaultActive, true);
   assert.ok(tool.promptSnippet && !tool.promptSnippet.includes("\n"));

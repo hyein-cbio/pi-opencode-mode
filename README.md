@@ -167,6 +167,27 @@ return { name: pkg.name, testCommand: pkg.scripts.test, testFiles };
 
 This uses two independent, read-only host tools and awaits both. The result contains the package name, its test command, and at most 20 test paths, rather than the full package file. Native `codemode` can perform the same task. Here the choice is the interpreter and this extension's explicit limits—not a promised speedup, stronger isolation, or a capability missing from Pi.
 
+## Shell commands and heredocs
+
+The prompt nudge recommends JavaScript template literals (backticks) for
+multiline shell commands and heredocs. Ordinary `"..."` and `'...'` JS strings
+cannot contain raw newlines, and shell quoting does not protect the outer JS
+string. For example:
+
+```js
+return await tools.bash({ command: `python3 - <<'PY'
+print("both double quotes and 'single quotes' are shell-command data")
+PY` });
+```
+
+Template literals still interpret backticks, `${...}`, and backslash escapes:
+escape embedded backticks and literal `${...}` at the JS layer, and double
+backslashes that the shell or embedded language must receive literally. A quoted
+shell heredoc delimiter does not disable JavaScript interpolation. When sending
+the source in a JSON `code` string, apply JSON escaping too. This is authoring
+guidance only; preflight still rejects invalid source without repairing or
+executing it.
+
 ## Discover tools and their arguments
 
 The callable-tool list in `codemode_o`'s description shows names, not every argument. Before using an unfamiliar tool, inspect its current signature with OpenCode's **synchronous `search(...)` global**. For an exact lookup, ask Pi to run:
