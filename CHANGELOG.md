@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Changed
+
+- Use `@opencode/codemode` 2.2.0. The published interpreter sources are unchanged
+  from 2.1.4; Acorn stays 8.15.0 and Effect stays 4.0.1. The extension's tool
+  bridge, limits, preflight, and result contract are unchanged, including
+  rejection of `for...in`.
+
 ## 0.1.4 — 2026-10-26
 
 ### Changed
