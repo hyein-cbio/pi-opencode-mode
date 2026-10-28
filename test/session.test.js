@@ -178,6 +178,20 @@ test("isolated real Pi SDK session", { skip: !sdk && "set PI_OPENCODE_SDK to a l
       const hidden = await run('return await tools.codemode({code: "return 1"});');
       assert.equal(hidden.isError, true);
     });
+    await t.test("String.raw and recovery suggestions survive real session storage", async () => {
+      const raw = await run('return String.raw`python3 - <<PY\nprint("\\n")\nPY`;');
+      assert.equal(raw.isError, false);
+      assert.equal(JSON.parse(raw.content[0].text), 'python3 - <<PY\nprint("\\n")\nPY');
+      assert.equal(raw.details.preflight.supported, true);
+      assert.equal(raw.nestedCalls?.calls?.length ?? 0, 0);
+      const unknown = await run('return await tools.not_a_tool({});');
+      assert.equal(unknown.isError, true);
+      assert.equal(unknown.details.error.kind, "UnknownTool");
+      assert.ok(unknown.details.error.suggestions.length > 0);
+      for (const suggestion of unknown.details.error.suggestions) {
+        assert.ok(unknown.content[0].text.includes(`Suggestion: ${suggestion}\n`));
+      }
+    });
     await t.test("native-required source is rejected before host effects in a real session", async () => {
       const before = state.echoRuns;
       const result = await run('await tools.safe_echo({value: 1}); text("done");');

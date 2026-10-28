@@ -66,27 +66,30 @@ test("README multi-tool example returns a compact overview with the documented i
   ]);
 });
 
-test("README heredoc example preserves newlines and nested quotes through the JS layer", async () => {
+test("README heredoc examples preserve newlines, nested quotes and raw backslashes", async () => {
   const snippets = examples("Shell commands and heredocs");
-  assert.equal(snippets.length, 1);
+  const commands = [
+    "python3 - <<'PY'\nprint(\"both double quotes and 'single quotes' are shell-command data\")\nPY",
+    "python3 - <<'PY'\nimport re\nprint(re.search(r\"\\bword\\b\", \"a word\"))\nPY",
+  ];
+  assert.equal(snippets.length, commands.length);
   const { tool } = setup();
-  const calls = [];
-  const params = { code: snippets[0] };
-  const result = await tool.execute("readme-heredoc", params, undefined, undefined, {
-    tools: [{ name: "bash", parameters: { type: "object" } }],
-    async executeTool(name, args) {
-      calls.push({ name, args });
-      return { result: { content: [{ type: "text", text: "stub only" }] } };
-    },
-  });
-  assert.notEqual(result.isError, true, result.content[0].text);
-  assert.equal(result.details.preflight.supported, true);
-  assert.equal(params.code, snippets[0], "source is not rewritten");
-  assert.equal(JSON.parse(result.content[0].text), "stub only");
-  assert.deepEqual(calls, [{
-    name: "bash",
-    args: { command: "python3 - <<'PY'\nprint(\"both double quotes and 'single quotes' are shell-command data\")\nPY" },
-  }]);
+  for (const [index, code] of snippets.entries()) {
+    const calls = [];
+    const params = { code };
+    const result = await tool.execute("readme-heredoc", params, undefined, undefined, {
+      tools: [{ name: "bash", parameters: { type: "object" } }],
+      async executeTool(name, args) {
+        calls.push({ name, args });
+        return { result: { content: [{ type: "text", text: "stub only" }] } };
+      },
+    });
+    assert.notEqual(result.isError, true, result.content[0].text);
+    assert.equal(result.details.preflight.supported, true);
+    assert.equal(params.code, code, "source is not rewritten");
+    assert.equal(JSON.parse(result.content[0].text), "stub only");
+    assert.deepEqual(calls, [{ name: "bash", args: { command: commands[index] } }]);
+  }
 });
 
 test("README search examples expose input signatures without invoking host tools", async () => {

@@ -48,8 +48,10 @@ test("registration supplies conditional preference without routing or prompt hoo
   assert.match(guidelines, /use native if active, otherwise report it is needed/);
   assert.match(guidelines, /Never automatically replay execution failures; effects are not rolled back/);
   assert.ok(guidelines.includes("For multiline shell/heredoc commands, use JS template literals (backticks), not raw newlines in quoted strings"));
-  assert.ok(guidelines.includes("Escape embedded backticks, literal ${...}, and backslashes at the JS layer"));
+  assert.match(guidelines, /Double backslashes in ordinary templates, not String.raw/);
   assert.match(guidelines, /shell quotes do not protect JS strings/);
+  assert.ok(guidelines.includes("Both evaluate ${...}; escape backtick delimiters"));
+  assert.ok(guidelines.includes("String.raw retains backslashes used to escape backticks/${...}"));
   assert.equal(tool.exposure, "model-only");
   assert.equal(tool.defaultActive, true);
   assert.ok(tool.promptSnippet && !tool.promptSnippet.includes("\n"));

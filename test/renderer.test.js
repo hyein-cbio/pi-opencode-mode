@@ -166,6 +166,37 @@ test("collapsed calls show the last eight in bounded rows, expanded shows all re
   }
 });
 
+test("failure count stays visible for hidden failures without totals or success counts", async () => {
+  const value = await tool().execute("hidden-failure", {
+    code: 'await Promise.allSettled(Array.from({length:10},(_,i)=>tools.host({i}))); return "done";',
+  }, undefined, undefined, {
+    tools: [{ name: "host", parameters: { type: "object" } }],
+    async executeTool(_name, args) {
+      return { isError: args.i === 0, result: { content: [{ type: "text", text: args.i === 0 ? "denied" : "ok" }] } };
+    },
+  });
+  assert.equal(value.details.ok, true, "handled host errors do not fail the script");
+  assert.equal(value.content[0].text, '"done"');
+  const snapshot = structuredClone(value);
+  for (const expanded of [false, true]) {
+    for (const isPartial of [false, true]) {
+      const text = render(value, { expanded, isPartial });
+      assert.match(text, /\n1 failed\n/);
+      assert.doesNotMatch(text, /10 calls|succeeded|0 failed/);
+      if (!expanded) {
+        assert.match(text, /2 earlier calls/);
+        assert.doesNotMatch(text, /denied|\{"i":0\}/);
+      }
+      for (const width of [5, 12, 24, 80]) render(value, { expanded, isPartial }, context(), width);
+    }
+  }
+  assert.deepEqual(value, snapshot, "summary changes presentation only");
+  assert.match(render(result("", { calls: [{ status: "error" }, { status: "error" }] })), /2 failed/);
+  for (const calls of [[], [{ status: "ok" }], [{ status: "running" }], [{ status: "cancelled" }], [{ name: "legacy" }]]) {
+    assert.doesNotMatch(render(result("", { calls })), /failed|succeeded|\d+ calls/);
+  }
+});
+
 test("partial rows show running calls and elapsed time, legacy rows never infer success", () => {
   const value = result("stale output", { calls: [{ name: "read", args: '{"path":"A"}', status: "running" }] });
   const ctx = context({ state: { startedAt: Date.now() } });

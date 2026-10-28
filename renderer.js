@@ -54,6 +54,10 @@ class CallList {
     const { expanded, theme } = this;
     const shown = expanded ? this.calls : this.calls.slice(-CALL_PREVIEW_COUNT);
     const lines = [];
+    // Count all retained attempts, including failures hidden by the last-eight
+    // preview. Handled failures do not change the script's success semantics.
+    const failed = this.calls.filter((call) => call.status === "error").length;
+    if (failed) lines.push(truncateToWidth(theme.fg("error", `${failed} failed`), width, "…"));
     if (shown.length < this.calls.length) {
       lines.push(truncateToWidth(theme.fg("muted", `... (${this.calls.length - shown.length} earlier calls, `) +
         keyHint("app.tools.expand", "to expand") + theme.fg("muted", ")"), width, "…"));

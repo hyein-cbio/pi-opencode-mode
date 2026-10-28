@@ -35,6 +35,7 @@ test("one-line tool batches and loop bodies get structural line breaks", () => {
 test("heredoc, escapes, regex, Korean and template interiors remain verbatim", () => {
   for (const source of [
     escapedSource,
+    'const x = [String.raw`python3 - <<PY\nprint("\\n")\nPY`, String.raw`\\b${1 + 2}\\b`]; return x;',
     'const x = ["한😀\\n", "root / payload << EOF"]; return x;',
     'const x = [/a[,;{}]b/g, "\\\\\\\""]; return x;',
     'const x = [1, `line one\n${[1,2].map(x=>{return x;})}\nline three`]; return x;',

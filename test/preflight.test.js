@@ -72,6 +72,53 @@ return {
   });
 });
 
+test("String.raw templates preserve shell data and evaluate substitutions without source rewriting", async () => {
+  const cases = [
+    ['return String.raw`\\bfoo\\s+bar\\b`;', String.raw`\bfoo\s+bar\b`],
+    ['return String.raw`python3 - <<\'PY\'\nprint("\\n")\nPY`;', "python3 - <<'PY'\nprint(\"\\n\")\nPY"],
+    ['const path="/tmp/demo"; return String.raw`grep "\\bword\\b" ${path}`;', 'grep "\\bword\\b" /tmp/demo'],
+    ['return String.raw`한😀 \\u{INVALID}`;', '한😀 \\u{INVALID}'],
+    ['return String.raw`\\${literal} \\`quoted\\``;', '\\${literal} \\`quoted\\`'],
+    ['return String.raw`models text @options: ${1 + 2}`;', 'models text @options: 3'],
+  ];
+  for (const [code, expected] of cases) {
+    const params = { code };
+    const result = await registeredTool().execute("raw", params, undefined, undefined, { tools: [] });
+    assert.equal(result.details.preflight.supported, true, code);
+    assert.equal(result.details.ok, true, result.content[0].text);
+    assert.equal(JSON.parse(result.content[0].text), expected, code);
+    assert.equal(params.code, code);
+  }
+  const calls = [];
+  const code = 'return await tools.bash({command:String.raw`echo "\\bword\\b" ${await tools.value({})}`});';
+  const result = await registeredTool().execute("raw-host", { code }, undefined, undefined, {
+    tools: ["bash", "value"].map((name) => ({ name, parameters: { type: "object" } })),
+    async executeTool(name, args) {
+      calls.push({ name, args });
+      return { result: { content: [{ type: "text", text: name === "value" ? "demo" : "stub only" }] } };
+    },
+  });
+  assert.equal(result.details.ok, true, result.content[0].text);
+  assert.deepEqual(calls, [{ name: "value", args: {} }, { name: "bash", args: { command: 'echo "\\bword\\b" demo' } }]);
+});
+
+test("raw template admission stays narrow and substitutions retain preflight guards", async () => {
+  for (const [source, reason] of [
+    ['return custom`value`;', 'unsupported-syntax:TaggedTemplateExpression'],
+    ['const raw=String.raw; return raw`value`;', 'unsupported-syntax:TaggedTemplateExpression'],
+    ['return String["raw"]`value`;', 'unsupported-syntax:TaggedTemplateExpression'],
+    ['return other.raw`value`;', 'unsupported-syntax:TaggedTemplateExpression'],
+    ['return String.raw`${load("x")}`;', 'native-name:load'],
+    ['return String.raw`${1n}`;', 'unsupported-literal'],
+    ['return String.raw`${class X {}}`;', 'unsupported-syntax:ClassExpression'],
+  ]) {
+    const result = await registeredTool().execute("raw-reject", { code: 'await tools.write({}); ' + source }, undefined, undefined, forbiddenContext);
+    assert.deepEqual(result.details.preflight.reasons, [reason], source);
+    assert.equal(result.details.error.kind, "NativeCodemodeRequired");
+    assert.deepEqual(result.details.calls, []);
+  }
+});
+
 test("for-in is rejected before earlier host calls or runtime construction", async () => {
   for (const source of [
     'const keys = []; for (const key in { a: 1 }) keys.push(key); return keys;',

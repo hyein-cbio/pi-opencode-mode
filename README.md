@@ -28,13 +28,13 @@ interpreter choice, not an OpenCode server or a replacement Pi CLI.
 Install the versioned npm package in Pi:
 
 ```sh
-pi install npm:pi-opencode-mode@0.1.4
+pi install npm:pi-opencode-mode@0.1.5
 ```
 
 Or install the tagged Git source:
 
 ```sh
-pi install git:github.com/hyein-cbio/pi-opencode-mode@v0.1.4
+pi install git:github.com/hyein-cbio/pi-opencode-mode@v0.1.5
 ```
 
 Restart Pi after installation. To explicitly enable both code tools:
@@ -54,7 +54,7 @@ Requires **Node.js >= 22.19.0**, npm, Git, and **Pi >= 0.99.0, < 2.0.0** with a 
 1. **Install from source for the walkthrough.** Use the release tag so the examples match this version.
 
    ```sh
-   git clone --branch v0.1.4 https://github.com/hyein-cbio/pi-opencode-mode.git
+   git clone --branch v0.1.5 https://github.com/hyein-cbio/pi-opencode-mode.git
    cd pi-opencode-mode
    npm ci
    ```
@@ -114,7 +114,7 @@ milliseconds** (lower is better).
 - `pi-opencode-mode` **0.0.1** at revision
   [`53b9dd9`](https://github.com/hyein-cbio/pi-opencode-mode/tree/53b9dd937ad53cd3558b086ab21e812780524d5a),
   OpenCode CodeMode **2.1.0**, Effect **4.0.1**. This is a **historical snapshot,
-  not a fresh measurement of 0.1.4**; later code changes have not been remeasured
+  not a fresh measurement of 0.1.5**; later code changes have not been remeasured
   in this table.
 - **20 warm samples**, 4 warmups, and one first-invocation control per eligible
   case/tool. p95 is nearest-rank. The clock spans root tool execution, including
@@ -183,10 +183,25 @@ PY` });
 Template literals still interpret backticks, `${...}`, and backslash escapes:
 escape embedded backticks and literal `${...}` at the JS layer, and double
 backslashes that the shell or embedded language must receive literally. A quoted
-shell heredoc delimiter does not disable JavaScript interpolation. When sending
-the source in a JSON `code` string, apply JSON escaping too. This is authoring
-guidance only; preflight still rejects invalid source without repairing or
-executing it.
+shell heredoc delimiter does not disable JavaScript interpolation.
+
+For backslash-heavy commands, `String.raw` tagged templates preserve backslashes
+without doubling them at the JS layer:
+
+```js
+return await tools.bash({ command: String.raw`python3 - <<'PY'
+import re
+print(re.search(r"\bword\b", "a word"))
+PY` });
+```
+
+`String.raw` still evaluates `${...}` substitutions, and backticks still delimit
+the template. Escaping a backtick or `${` in its raw text also retains the
+backslash in the result; use a substitution when you need those characters
+without that extra backslash. Only the direct `String.raw` tag is admitted;
+custom tags, aliases, and computed tags such as `String["raw"]` stay rejected.
+When sending the source in a JSON `code` string, apply JSON escaping too. No
+source is automatically repaired or rewritten.
 
 ## Discover tools and their arguments
 
@@ -222,7 +237,7 @@ After the LLM explicitly calls `codemode_o`, `checkOpenCodeCompatibility(code)` 
 The historical `selectCodemodeRoute` helper and `ROUTE_LIMITS` alias remain for API compatibility only; the extension does not call that helper. Its `requested: "auto"` result is a legacy static advisory, not the tool-selection policy.
 
 - OpenCode candidates are at most **8,192 UTF-8 source bytes**, **100 lines**, **2,000 AST nodes**, and **64 AST levels**. Acorn parses source without executing it; a conservative compatibility allowlist rejects unknown syntax.
-- Pi globals (`text`, `image`, `exit`, `store`, `load`, `ALL_TOOLS`, `searchTools`, `describeTool`, `describeNamespace`, `models`), options comments (`@options:`), classes, BigInt literals, generators, accessors, and uncertain constructors are rejected by the OpenCode preflight. `switch`/`case` and `new Date`, `new RegExp`, `new Map`, `new Set`, `new URL`, `new EvalError`, and `new URIError` are admitted because CodeMode 2.2.0 runs them. Regular-expression literals (such as `/pattern/g`) are supported; malformed patterns or flags fail as source syntax errors. Other constructors, including `new Promise` and `new URLSearchParams`, stay rejected. `for...in` also stays rejected before execution: CodeMode 2.2.0 skips inherited properties and still visits keys deleted during iteration. Comments, strings, and ordinary property names do not count as global references; shadowed Pi names conservatively stay native.
+- Pi globals (`text`, `image`, `exit`, `store`, `load`, `ALL_TOOLS`, `searchTools`, `describeTool`, `describeNamespace`, `models`), options comments (`@options:`), classes, BigInt literals, generators, accessors, and uncertain constructors are rejected by the OpenCode preflight. `switch`/`case` and `new Date`, `new RegExp`, `new Map`, `new Set`, `new URL`, `new EvalError`, and `new URIError` are admitted because CodeMode 2.2.0 runs them. Direct `String.raw` tagged templates are also admitted, with substitutions subject to the same preflight checks as other expressions; arbitrary tags stay rejected. Regular-expression literals (such as `/pattern/g`) are supported; malformed patterns or flags fail as source syntax errors. Other constructors, including `new Promise` and `new URLSearchParams`, stay rejected. `for...in` also stays rejected before execution: CodeMode 2.2.0 skips inherited properties and still visits keys deleted during iteration. Comments, strings, and ordinary property names do not count as global references; shadowed Pi names conservatively stay native.
 - This is a compatibility guard, **not** a tool selector, full JavaScript semantic validator, cost estimator, or security boundary. Tool availability, values, built-in methods, runtime failures, and actual running time cannot be proven statically. Rejection does not guarantee that native Pi supports the program either.
 - Native Pi `codemode` is **model-only**, so this extension cannot invoke it through `ctx.executeTool`. When preflight rejects a compatibility limitation, `codemode_o` returns `NativeCodemodeRequired` **before constructing the runtime or calling any host tool**. The caller must invoke the active built-in `codemode` itself, using its raw-source input contract. If it is disabled, report that native `codemode` is needed; this extension does not enable it. No tool name rewriting or permission bypass is used.
 - Invalid source in Acorn's script context returns `SourceSyntaxError` (`invalid-script-syntax`), not a native recommendation. Unexpected parser exceptions return `PreflightParserError` (`internal-parser-error`). Both stop before runtime construction, preserve a bounded original parser message without a stack or source excerpt, and never rewrite or replay source. Syntax errors should be fixed before running; internal parser failures should be reported.
@@ -240,7 +255,7 @@ The supported Pi range is **>= 0.99.0, < 2.0.0**, with matching Pi/TUI versions.
 - **65,536 UTF-8 bytes** bounds the extension's final `content` text, after JSON encoding, logs, error messages, warnings, separators, and truncation notices. It does not bound the entire Pi message/envelope, `details`, tool names/audit metadata, upstream allocations, or later output added by other extensions.
 - Ordinary complete values retain JSON encoding (`42`, `"text"`, etc.); logs precede the value. Errors and warnings take precedence over data. Warnings remain successful if upstream reports success, but appear in both model-visible text and `details.warnings`. No warning causes a retry.
 - Upstream or final-render truncation sets `details.truncated: true` and adds a visible notice. Data following that notice is an **incomplete preview, not complete JSON**. No full output is written to disk. Return smaller data when completeness matters.
-- Structured error/warning diagnostics have a separate **8 KiB serialized budget**, shared between error and warnings, with bounded messages (1,024 bytes), kinds (64 bytes), and suggestions (up to three, 128 bytes each). Clipping/omission adds a `Truncated` warning; diagnostics cannot be crowded out by logs or return data. Locations and bounded suggestions remain in details.
+- Structured error/warning diagnostics have a separate **8 KiB serialized budget**, shared between error and warnings, with bounded messages (1,024 bytes), kinds (64 bytes), and suggestions (up to three, 128 bytes each). Clipping/omission adds a `Truncated` warning; diagnostics cannot be crowded out by logs or return data. Locations and bounded suggestions remain in details. Retained suggestions also appear as `Suggestion: …` lines in model-visible error/warning text, before logs or return data; they never trigger automatic retries.
 - Host structured results take precedence over text; otherwise text blocks are joined with newlines. Non-text-only/multimodal host results without structured data are rejected.
 
 ## Output presentation
@@ -267,6 +282,11 @@ and incomplete-output indicators remain visible above collapsed data.
   one width-bounded row; expansion shows all retained previews and error text.
   Pi's native shell supplies pending/success/error backgrounds; shortened call
   rows preserve that background through the ellipsis, duration and padding.
+  When any retained attempt has error status, a `1 failed`-style count stays
+  visible even if that attempt is outside the last-eight preview. No total or
+  success count is added, and no failure count appears when there are no errors.
+  Cancelled attempts are not counted as failures. This does not change the
+  script's success/error result.
 - **Live and restored records.** `onUpdate` publishes detached snapshots during
   execution; final `details.calls` retains up to 64 records after host cleanup.
   Each record keeps a name (128 UTF-8 bytes), argument preview (1,024 bytes),
@@ -305,7 +325,7 @@ Real-session tests use disposable directories, in-memory history/settings, scrip
 
 ## Project information
 
-- [Changes and 0.1.4 release notes](CHANGELOG.md)
+- [Changes and 0.1.5 release notes](CHANGELOG.md)
 - [Security policy and private reporting](SECURITY.md)
 - [Bug reports and feature requests](https://github.com/hyein-cbio/pi-opencode-mode/issues)
 

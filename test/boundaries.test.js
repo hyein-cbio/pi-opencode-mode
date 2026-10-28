@@ -144,6 +144,33 @@ test("encoded output, logs and diagnostics respect the final UTF-8 limit", async
   bounded(await run(`return "x".repeat(${LIMIT - 1});`));
 });
 
+test("bounded recovery suggestions reach model-visible errors and warnings before data", async () => {
+  const unknown = await run('return await tools.missing({});');
+  assert.equal(unknown.details.error.kind, "UnknownTool");
+  assert.deepEqual(unknown.details.error.suggestions, ["Use search to find available tools."]);
+  assert.match(unknown.content[0].text, /\nSuggestion: Use search to find available tools\.\n/);
+  let called = false;
+  const invalid = await run('return await tools.host({}, {});', {
+    tools: [{ name: "host", parameters: { type: "object" } }],
+    async executeTool() { called = true; assert.fail("invalid input must not reach the host"); },
+  });
+  assert.equal(called, false);
+  assert.equal(invalid.details.error.kind, "InvalidToolInput");
+  assert.equal(invalid.details.error.suggestions, undefined);
+  assert.doesNotMatch(invalid.content[0].text, /Suggestion:/);
+  const warning = await run('tools.missing({}); return "done";');
+  assert.equal(warning.isError, undefined);
+  assert.equal(warning.details.warnings[0].kind, "UnknownTool");
+  assert.match(warning.content[0].text, /^Warning UnknownTool:/);
+  assert.ok(warning.content[0].text.indexOf("Suggestion:") < warning.content[0].text.indexOf('"done"'));
+  const clipped = await run('for(let i=0;i<100;i++) tools.missing({}); console.log("x".repeat(65536)); return "\\u0000".repeat(20000);');
+  const text = bounded(clipped);
+  assert.ok(clipped.details.warnings.some((entry) => entry.kind === "Truncated"));
+  for (const entry of clipped.details.warnings) {
+    for (const suggestion of entry.suggestions ?? []) assert.ok(text.includes(`Suggestion: ${suggestion}\n`));
+  }
+});
+
 test("host errors and result formats keep the public bridge contract", async () => {
   const ctx = {
     tools: [{ name: "host", parameters: { type: "object" } }],

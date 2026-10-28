@@ -1,16 +1,25 @@
 # Changelog
 
-## Unreleased
+## 0.1.5 — 2026-10-28
 
 ### Changed
 
 - Use `@opencode/codemode` 2.2.0. The published interpreter sources are unchanged
-  from 2.1.4; Acorn stays 8.15.0 and Effect stays 4.0.1. The extension's tool
-  bridge, limits, preflight, and result contract are unchanged, including
-  rejection of `for...in`.
+  from 2.1.4; Acorn stays 8.15.0 and Effect stays 4.0.1. This dependency
+  update alone does not change the tool bridge, limits, preflight, or result
+  contract; `for...in` remains rejected.
 
 ### Improvements
 
+- Admit direct `String.raw` tagged templates through preflight for backslash-heavy
+  shell commands and heredocs. Other tags stay rejected; substitutions retain
+  the existing compatibility checks, and source is never rewritten. Document
+  interpolation/backtick caveats in model guidance and the shell examples.
+- Include bounded upstream recovery suggestions in model-visible error/warning
+  text, before logs and return data, without automatic retry or replay.
+- Show an error-attempt count such as `1 failed` only when failures exist,
+  including failures hidden by the last-eight-call preview. Do not add total or
+  success counts, count cancellations as failures, or change script success.
 - Nudge models to use JS template literals for multiline shell commands and
   heredocs, with explicit guidance on embedded backticks, interpolation, and
   backslash escaping. Source validation and execution behavior are unchanged.

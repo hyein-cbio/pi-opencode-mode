@@ -120,9 +120,11 @@ function diagnostics(result) {
 function renderResult(result) {
   const diagnostic = diagnostics(result);
   // Diagnostics precede data: full-size values/logs cannot hide warnings or errors.
+  const notice = (entry, label = "") => `${label}${entry.kind}: ${entry.message}\n` +
+    (entry.suggestions ?? []).map((suggestion) => `Suggestion: ${suggestion}\n`).join("");
   const notices = [
-    ...(diagnostic.error ? [`${diagnostic.error.kind}: ${diagnostic.error.message}\n`] : []),
-    ...diagnostic.warnings.map((warning) => `Warning ${warning.kind}: ${warning.message}\n`),
+    ...(diagnostic.error ? [notice(diagnostic.error)] : []),
+    ...diagnostic.warnings.map((warning) => notice(warning, "Warning ")),
   ].join("");
   // Upstream has already bounded value/log data. JSON escaping can expand that
   // bounded input (at most 6x); apply the final guard AFTER this encoding.
@@ -179,7 +181,7 @@ export function createOpenCodeModeExtension({ parseSource } = {}) {
         "Choose from task context. Prefer codemode_o for short, self-contained programs within its syntax/limits, including tools.bash and tools.edit. Call codemode_o or native codemode directly (model-only).",
         "Use native codemode upfront for Pi globals/@options/models, images, MCP (readiness), or work past these limits. A bash or edit call alone stays here.",
         "Preflight validates, never routes. NativeCodemodeRequired means no source ran: use native if active, otherwise report it is needed. Never automatically replay execution failures; effects are not rolled back.",
-        "For multiline shell/heredoc commands, use JS template literals (backticks), not raw newlines in quoted strings. Escape embedded backticks, literal ${...}, and backslashes at the JS layer; shell quotes do not protect JS strings.",
+        "For multiline shell/heredoc commands, use JS template literals (backticks), not raw newlines in quoted strings. Double backslashes in ordinary templates, not String.raw. Both evaluate ${...}; escape backtick delimiters. String.raw retains backslashes used to escape backticks/${...}; shell quotes do not protect JS strings.",
       ],
       parameters: Type.Object({
         code: Type.String({ description: "OpenCode CodeMode source." }),

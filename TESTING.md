@@ -24,9 +24,8 @@ npm test
 
 After dependencies are installed, the tests do not install SDKs or use model
 APIs. The release pin under test is `@opencode/codemode` **2.2.0**. Without
-`PI_OPENCODE_SDK`, the session suite explicitly skips: the current result on
-Node **v22.23.4** is **77 passed, 0 failed, 1 skipped** (78). The skip is
-`isolated real Pi SDK session`. The boundary tests include literal 30-second
+`PI_OPENCODE_SDK`, the `isolated real Pi SDK session` suite explicitly skips.
+The boundary tests include literal 30-second
 timeout and delayed-cleanup probes, so the suite takes at least 30 seconds.
 
 ## Full suite with an existing SDK
@@ -37,14 +36,14 @@ To use the SDK installed by `npm ci`:
 PI_OPENCODE_SDK="$PWD/node_modules/@earendil-works/pi-coding-agent" npm test
 ```
 
-Expected result: **87 passed, 0 skipped**, including the SDK suite's parent and
-nine subtests. To run only the session suite:
+Expected result: **93 passed, 0 skipped**, including the SDK suite's parent and
+ten subtests. To run only the session suite:
 
 ```sh
 PI_OPENCODE_SDK="$PWD/node_modules/@earendil-works/pi-coding-agent" node --test test/session.test.js
 ```
 
-Expected result: **10 passed, 0 skipped**. You can also supply an absolute path to
+Expected result: **11 passed, 0 skipped**. You can also supply an absolute path to
 another installed SDK package directory. For an exact dependency-version test,
 use the clean-copy matrix below rather than mixing a local host installation
 with another SDK directory.
@@ -130,6 +129,25 @@ CodeMode **2.1.4** against Pi **0.99.0 / 1.3.0 / 1.4.0**; all three full suites
 passed without skips. This is not a claim that the new hosted workflow has
 already run. Cancellation timing tests compare recorded duration with measured
 host/cleanup elapsed time rather than a nominal timer-delay floor.
+
+## 0.1.5 release verification — 2026-10-28
+
+On macOS arm64 with Node **26.12.1** and CodeMode **2.2.0**, the full suite
+passed **93 tests, 0 failures, 0 skips**. Clean disposable installs also passed
+the full suite against Pi **0.99.0 / 1.3.0 / 1.4.0**, with no skips.
+
+Regression coverage includes direct `String.raw` templates with heredocs,
+backslashes, invalid cooked escapes, Unicode, and awaited substitutions;
+non-admitted tags and Pi-only expressions still fail before earlier host effects.
+README examples run only safe in-memory host stubs. Real SDK sessions retain raw
+text and model-visible recovery suggestions. Error/warning suggestions remain
+within diagnostic/final-output budgets. Rendering tests cover hidden failures,
+partial/expanded views, narrow widths, and the absence of total/success counts
+or zero-failure summaries; cancelled attempts do not count as failures.
+
+These are local checks, not new Node **22.19.0 / 24.x** hosted CI evidence, a
+live-provider/model walkthrough, or a fresh benchmark. No release or publication
+is performed by these test commands.
 
 ## 0.1.0 preparation evidence
 

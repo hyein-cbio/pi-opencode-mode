@@ -19,7 +19,7 @@ const SYNTAX = new Set([
   "BinaryExpression", "LogicalExpression", "UnaryExpression", "UpdateExpression", "AssignmentExpression",
   "ConditionalExpression", "SequenceExpression", "CallExpression", "MemberExpression", "ChainExpression",
   "AwaitExpression", "ArrowFunctionExpression", "FunctionExpression", "FunctionDeclaration",
-  "NewExpression", "TemplateLiteral", "TemplateElement",
+  "NewExpression", "TemplateLiteral", "TemplateElement", "TaggedTemplateExpression",
 ]);
 const NATIVE_NAMES = new Set([
   "text", "image", "exit", "store", "load", "ALL_TOOLS", "searchTools", "describeTool",
@@ -104,6 +104,13 @@ export function checkOpenCodeCompatibility(code, parseSource = parse) {
     const { node, parent, key, depth } = pending.pop();
     if (++count > PREFLIGHT_LIMITS.maxNodes || depth > PREFLIGHT_LIMITS.maxDepth) return rejected("source-too-complex");
     if (!SYNTAX.has(node.type)) return rejected(`unsupported-syntax:${node.type}`);
+    // Admit only the verified String.raw tag, not arbitrary tagged calls. Walk
+    // its substitutions normally: raw text does not make interpolation inert.
+    if (node.type === "TaggedTemplateExpression" && !(
+      node.tag.type === "MemberExpression" && !node.tag.computed &&
+      node.tag.object.type === "Identifier" && node.tag.object.name === "String" &&
+      node.tag.property.type === "Identifier" && node.tag.property.name === "raw"
+    )) return rejected("unsupported-syntax:TaggedTemplateExpression");
     // OpenCode supports regex literals; Acorn has already validated their syntax.
     // Keep BigInt outside our compatibility subset.
     if (node.type === "Literal" && node.bigint !== undefined) return rejected("unsupported-literal");
