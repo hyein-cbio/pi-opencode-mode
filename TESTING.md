@@ -23,7 +23,7 @@ npm test
 ```
 
 After dependencies are installed, the tests do not install SDKs or use model
-APIs. The release pin under test is `@opencode/codemode` **2.2.0**. Without
+APIs. The release pin under test is `@opencode/codemode` **2.2.1**. Without
 `PI_OPENCODE_SDK`, the `isolated real Pi SDK session` suite explicitly skips.
 The boundary tests include literal 30-second
 timeout and delayed-cleanup probes, so the suite takes at least 30 seconds.
@@ -65,9 +65,11 @@ This opt-in command installs from npm. For each supported baseline it:
 
 It does not alter the source checkout's dependencies or personal Pi settings.
 The release pin this command installs and verifies is `@opencode/codemode`
-**2.2.0**. On Node **v22.23.4**, `npm run test:pi-versions` passed **3** tests
-and failed **0**, one full suite each for Pi **0.99.0**, **1.3.0**, and
-**1.4.0**, with no skipped tests inside those suites.
+**2.2.1**. On Node **v22.23.4**, `npm test` passed **82** tests, failed **0**,
+and skipped **1** (`isolated real Pi SDK session` without `PI_OPENCODE_SDK`).
+`npm run test:pi-versions` passed **3** tests and failed **0**, one full suite
+each for Pi **0.99.0**, **1.3.0**, and **1.4.0** against installed CodeMode
+**2.2.1**, with no skipped tests inside those suites.
 
 To test one baseline (the same command used in each CI job):
 

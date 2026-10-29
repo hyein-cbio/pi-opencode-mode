@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Use `@opencode/codemode` 2.2.1. Acorn stays 8.15.0 and Effect stays 4.0.1.
+  The published package contents differ from 2.2.0, including a new interpreter
+  runner module. This dependency update did not require a change to the tool
+  bridge, limits, preflight, or result contract; `for...in` remains rejected.
+
 ## 0.1.5 — 2026-10-28
 
 ### Changed
