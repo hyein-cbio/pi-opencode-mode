@@ -4,6 +4,13 @@
 
 ### Changed
 
+- Use `@opencode/codemode` 2.2.5. Acorn stays 8.15.0. Effect moves from 4.0.1
+  to 4.0.6 to match the published dependency. The 2.2.5 interpreter visits
+  inherited enumerable keys in `for...in` and still visits keys deleted during
+  iteration, so preflight still rejects that syntax before execution. This
+  dependency update did not require a change to the tool bridge, limits,
+  preflight, or result contract.
+
 - Use `@opencode/codemode` 2.2.1. Acorn stays 8.15.0 and Effect stays 4.0.1.
   The published package contents differ from 2.2.0, including a new interpreter
   runner module. This dependency update did not require a change to the tool

@@ -8,7 +8,8 @@ export const ROUTE_LIMITS = PREFLIGHT_LIMITS;
 
 // Intentionally narrower than the interpreter. Unknown/new syntax is rejected;
 // this is a static compatibility check, not routing, semantic proof, or authorization.
-// Keep for...in out: CodeMode 2.1.4 skips inherited keys and visits deleted keys.
+// Keep for...in out: CodeMode 2.2.5 visits inherited enumerable keys and still
+// visits keys deleted during iteration.
 const SYNTAX = new Set([
   "Program", "ExpressionStatement", "EmptyStatement", "BlockStatement", "ReturnStatement",
   "VariableDeclaration", "VariableDeclarator", "IfStatement", "ForStatement", "ForOfStatement",
