@@ -16,7 +16,7 @@ jobs:
     # Check the PR author, not the person who merged it or triggered the event.
     # Manual dispatch is independent of PR author/merge conditions.
     if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true && github.event.pull_request.user.login == 'cursor[bot]')
-    runs-on: ubuntu-latest
+    runs-on: instabox-medium
     timeout-minutes: 5
     outputs:
       version: ${{ steps.latest.outputs.version }}
@@ -47,7 +47,7 @@ jobs:
   compatibility:
     needs: resolve-latest
     name: CodeMode ${{ needs.resolve-latest.outputs.version }} / Node ${{ matrix.node }} / Pi ${{ matrix.pi }}
-    runs-on: ubuntu-latest
+    runs-on: instabox-medium
     timeout-minutes: 10
     strategy:
       fail-fast: false

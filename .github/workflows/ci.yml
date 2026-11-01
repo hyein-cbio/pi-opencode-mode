@@ -16,7 +16,7 @@ concurrency:
 jobs:
   compatibility:
     name: Node ${{ matrix.node }} / Pi ${{ matrix.pi }}
-    runs-on: ubuntu-latest
+    runs-on: instabox-medium
     timeout-minutes: 10
     strategy:
       fail-fast: false
