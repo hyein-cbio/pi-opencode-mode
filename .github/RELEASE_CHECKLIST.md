@@ -7,7 +7,9 @@ and release/tag creation are explicit maintainer actions.
 
 - [ ] Review the diff; ensure `package.json` and `package-lock.json` both say `0.1.5`.
 - [ ] Run `npm ci`, `npm audit`, and `npm run test:pi-versions`.
-- [ ] Confirm all six GitHub CI jobs pass after the changes are pushed.
+- [ ] Configure `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET` Actions secrets, migrate
+      required checks to `Node/Pi compatibility on Modal`, and confirm its six
+      Modal matrix cells pass after the changes are pushed.
 - [ ] Inspect `npm pack --dry-run --json`; check for secrets in the tree and history.
 - [ ] Check the README walkthrough with a configured model and inspect the TUI.
 - [ ] Review `CHANGELOG.md`, supported versions, and known limits.

@@ -12,8 +12,8 @@ matrix also covered 0.99.1, 0.99.2, and 1.0.0; those older checks were narrower
 than full scripted sessions. The current release gates cover 0.99.0, 1.3.0, and
 1.4.0 with the full suite. This CI matrix is not a restriction of the supported
 range or a claim that every intermediate release has been individually tested.
-Add newer baselines to both `test/pi-versions.test.js` and
-`.github/workflows/ci.yml` when updating the matrix.
+When updating the matrix, keep `test/pi-versions.test.js` and
+`ci/modal_ci.py` in sync; both workflows use the shared Modal matrix.
 
 ## Local unit and boundary tests
 
@@ -84,10 +84,83 @@ scripts are deliberately disabled in this harness; ordinary checkout installs
 still use `npm ci`. No paid model calls, npm publication, release creation, or
 repository visibility changes are part of CI.
 
+## Modal-backed CI
+
+Both GitHub workflows use the same pattern as `cloudroom-mcp`: GitHub Actions
+checks out the revision, installs the pinned Python Modal SDK from
+`ci/requirements.txt`, and dispatches work. **All Node/npm work runs on Modal**,
+including the upstream version lookup, clean installs, full tests, and
+`npm pack --dry-run --json`. There are no Node test jobs on GitHub runners.
+Each workflow creates **one Modal app**, with six isolated Node/Pi calls running
+in parallel inside it. This avoids Modal's app-creation rate limit. Every cell
+finishes even if another fails; any failure fails the aggregate GitHub check.
+
+**Branch protection migration:** if the old six `Node … / Pi …` checks are
+required, replace them with `Node/Pi compatibility on Modal`. The upstream
+workflow reports `Latest CodeMode compatibility on Modal`.
+
+`ci/modal_ci.py` uses `node:22.19.0-bookworm-slim` and
+`node:24-bookworm-slim` with Python 3.11. Each test function has 1 CPU, 2 GiB
+memory, a 10-minute timeout, and no automatic retries. Each cell also runs the
+Python CI regression tests. Only package inputs, tests, and the CI Python files
+are uploaded; `.env`, `.git`, `.pi`, and local `node_modules` are excluded.
+The existing harness still installs dependencies in disposable copies, with
+lifecycle scripts disabled; there is no dependency tree shared between runs.
+Remote failures propagate to the GitHub check. Modal compute may incur costs.
+
+### One-time setup
+
+Create a Modal CI/service-user token and add these repository or organization
+Actions secrets (organization secrets must grant this repository access):
+
+- `MODAL_TOKEN_ID`
+- `MODAL_TOKEN_SECRET`
+
+Missing tokens fail with an explicit setup error. Fork PR events are skipped
+because GitHub does not expose secrets to them; `pull_request_target` is not
+used. Same-repository PRs and pushes to main run normally. For a fork change,
+use the trusted post-merge push check or manually dispatch a trusted ref.
+Do not manually run untrusted code with Modal credentials.
+
+### Local reproduction
+
+With Python 3.11 and a configured Modal profile (or the two token environment
+variables), from the repository root:
+
+```sh
+python -m pip install -r ci/requirements.txt
+python -m unittest discover -s ci -p 'test_*.py'
+modal run ci/modal_ci.py::matrix
+modal run ci/modal_ci.py::matrix --upstream
+modal run ci/modal_ci.py::run_tests --node-version 22.19.0 --pi-version 1.4.0
+modal run ci/modal_ci.py::run_tests --node-version 24.x --pi-version 1.4.0 --upstream-version 2.2.5
+modal run ci/modal_ci.py::latest
+```
+
+The last command resolves npm latest remotely without running tests. The upstream
+matrix also resolves latest once, then sends that same exact version to all six
+remote calls. Its local entrypoint writes the version to `GITHUB_OUTPUT` and
+`GITHUB_STEP_SUMMARY`; CLI runs outside Actions do not require those files.
+
+### Migration verification — 2026-11-03
+
+Manual Modal runs passed all six release-pinned cells and all six upstream cells
+on Node **22.19.0 / 24.22.2** × Pi **0.99.0 / 1.3.0 / 1.4.0**, with CodeMode
+**2.2.5** (also npm latest at lookup time). Every cell passed the full SDK suite
+with no skips, the **13 Python CI regression tests**, and package dry-run.
+
+- [Release-pinned matrix](https://modal.com/apps/hyein-sophia-cho/main/ap-XKXGxw47V5BafNqvoEtUBN)
+- [Latest-upstream matrix](https://modal.com/apps/hyein-sophia-cho/main/ap-JmMQ9t9krgC4Bc46EaO2Jl)
+
+Both apps completed and stopped. The GitHub output/summary files, workflow
+syntax (`actionlint`), and whitespace checks were also verified. These manual
+runs do not mean GitHub Actions secrets or branch protection are configured.
+
 ## Post-merge latest-upstream check
 
 `.github/workflows/upstream-codemode.yml` automatically runs its latest-version
-checks when a PR **authored by `cursor[bot]` is merged into main**. Manual runs
+checks when a same-repository PR **authored by `cursor[bot]` is merged into main**.
+Fork PR events are skipped because they cannot access the Modal token. Manual runs
 are also available through `workflow_dispatch`, independently of PR authorship.
 There is no weekly schedule. Closing a PR without merging, or merging a PR
 from another author, skips the automatic lookup and test matrix. The author is
@@ -100,9 +173,9 @@ For PR events, checkout is pinned to the merged revision; manual runs use the
 selected ref at dispatch time. Each qualifying PR gets its own run without a
 shared concurrency group dropping queued checks. This is
 separate from normal push/PR CI, which continues to test the release-pinned
-dependency for all authors.
+dependency for all authors on trusted events (see the fork policy above).
 
-Each run queries the public npm registry for `@opencode/codemode@latest`, then
+Each run queries the public npm registry on Modal for `@opencode/codemode@latest`, then
 uses that exact resolved version across all six Node/Pi combinations. Registry
 lookup/install failures fail the check; there is no fallback to the pinned
 version. Each clean-copy run verifies the installed CodeMode version before
@@ -164,9 +237,10 @@ The clean-copy matrix was reproduced locally on macOS:
 | 24.22.1 | 1.3.0 | 49 passed, 0 skipped |
 | 24.22.1 | 1.4.0 | 49 passed, 0 skipped |
 
-These are local results, not a claim that hosted CI has already run. The new
-workflow runs on Ubuntu after it is pushed. The Node 24.x job follows the latest
-24.x patch, while the minimum Node version is pinned exactly.
+These are historical local results, not evidence of a hosted CI run. CI now
+executes on Modal's Debian-based Node images, with GitHub Actions only dispatching
+work. The Node 24.x image follows the 24.x line, while the minimum Node version
+is pinned exactly.
 
 ## 0.1.1 release verification — 2026-10-24
 
