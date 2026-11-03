@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { CodeMode } from "@opencode/codemode";
+import { Effect } from "effect";
 import { checkOpenCodeCompatibility } from "../route.js";
 import { createOpenCodeModeExtension } from "../index.js";
 import { command, escapedSource, rawNewlineSource } from "./fixtures/preflight-source.js";
@@ -119,12 +121,27 @@ test("raw template admission stays narrow and substitutions retain preflight gua
   }
 });
 
+async function installedCodeModeValue(code) {
+  const runtime = CodeMode.make({ limits: { timeoutMs: 5_000, maxToolCalls: 4, maxOutputBytes: 4_096 } });
+  const result = await Effect.runPromise(runtime.execute(code));
+  assert.equal(result.ok, true, JSON.stringify(result.error ?? result));
+  return result.value;
+}
+
+function hostKeys(enumerate) {
+  const keys = [];
+  enumerate(keys);
+  return keys;
+}
+
 test("for-in is rejected before earlier host calls or runtime construction", async () => {
-  for (const source of [
+  const sources = [
     'const keys = []; for (const key in { a: 1 }) keys.push(key); return keys;',
     'const obj = Object.create({ p: 1 }); obj.a = 2; const keys = []; for (const key in obj) keys.push(key); return keys;',
     'const obj = { a: 1, b: 2, c: 3 }, keys = []; for (const key in obj) { keys.push(key); delete obj.b; } return keys;',
-  ]) {
+    'const proto = { p: 1, q: 2 }; const obj = Object.create(proto); const keys = []; for (const key in obj) { keys.push(key); delete proto.q; } return keys;',
+  ];
+  for (const source of sources) {
     const params = { code: 'await tools.write({}); ' + source };
     const original = params.code;
     const result = await registeredTool().execute("for-in", params, undefined, undefined, forbiddenContext);
@@ -135,6 +152,40 @@ test("for-in is rejected before earlier host calls or runtime construction", asy
     assert.deepEqual(result.details.calls, []);
     assert.equal(params.code, original, "no rewriting, host effects, or native delegation");
   }
+
+  // The rejection stays because the installed interpreter snapshots keys. Inherited
+  // enumeration currently matches the host; deletion during iteration does not.
+  const observed = {
+    own: await installedCodeModeValue(sources[0]),
+    inherited: await installedCodeModeValue(sources[1]),
+    deleted: await installedCodeModeValue(sources[2]),
+    deletedPrototype: await installedCodeModeValue(sources[3]),
+  };
+  const host = {
+    own: hostKeys((keys) => { for (const key in { a: 1 }) keys.push(key); }),
+    inherited: hostKeys((keys) => {
+      const obj = Object.create({ p: 1 });
+      obj.a = 2;
+      for (const key in obj) keys.push(key);
+    }),
+    deleted: hostKeys((keys) => {
+      const obj = { a: 1, b: 2, c: 3 };
+      for (const key in obj) { keys.push(key); delete obj.b; }
+    }),
+    deletedPrototype: hostKeys((keys) => {
+      const proto = { p: 1, q: 2 };
+      const obj = Object.create(proto);
+      for (const key in obj) { keys.push(key); delete proto.q; }
+    }),
+  };
+  assert.deepEqual(observed.own, ["a"]);
+  assert.deepEqual(observed.inherited, ["a", "p"]);
+  assert.deepEqual(observed.inherited, host.inherited);
+  assert.deepEqual(observed.own, host.own);
+  assert.deepEqual(observed.deleted, ["a", "b", "c"]);
+  assert.deepEqual(host.deleted, ["a", "c"]);
+  assert.deepEqual(observed.deletedPrototype, ["p", "q"]);
+  assert.deepEqual(host.deletedPrototype, ["p"]);
 });
 
 test("regex literal methods and flags execute in the installed OpenCode runtime", async () => {

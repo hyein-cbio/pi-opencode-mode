@@ -107,11 +107,12 @@ test("switch and CodeMode constructors stay in OpenCode", () => {
   ]) assert.equal(checkOpenCodeCompatibility(code).reasons[0], "uncertain-constructor", code);
 });
 
-test("for-in stays native while inherited and deleted-key semantics differ", () => {
+test("for-in stays rejected while deletion during iteration still diverges", () => {
   for (const code of [
     'const keys = []; for (const key in { a: 1 }) keys.push(key); return keys;',
     'const obj = Object.create({ p: 1 }); obj.a = 2; const keys = []; for (const key in obj) keys.push(key); return keys;',
     'const obj = { a: 1, b: 2, c: 3 }, keys = []; for (const key in obj) { keys.push(key); delete obj.b; } return keys;',
+    'const proto = { p: 1, q: 2 }; const obj = Object.create(proto); const keys = []; for (const key in obj) { keys.push(key); delete proto.q; } return keys;',
   ]) {
     assert.equal(select(code).route, "codemode", code);
     assert.deepEqual(checkOpenCodeCompatibility(code).reasons, ["unsupported-syntax:ForInStatement"], code);
