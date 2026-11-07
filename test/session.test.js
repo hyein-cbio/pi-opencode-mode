@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { findPackageJSON } from "node:module";
 import { pathToFileURL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
+import { Type } from "typebox";
 import { createOpenCodeModeExtension } from "../index.js";
 import { rawNewlineSource } from "./fixtures/preflight-source.js";
 
@@ -16,7 +17,7 @@ test("isolated real Pi SDK session", { skip: !sdk && "set PI_OPENCODE_SDK to a l
   // Older SDKs keep pi-ai nested under their own node_modules (shrinkwrap).
   // Resolve relative to this SDK instead of assuming a hoisted sibling package.
   const aiPackage = findPackageJSON("@earendil-works/pi-ai", pathToFileURL(join(sdk, "package.json")));
-  const { Type, createAssistantMessageEventStream } = await import(pathToFileURL(join(dirname(aiPackage), "dist/index.js")));
+  const { createAssistantMessageEventStream } = await import(pathToFileURL(join(dirname(aiPackage), "dist/index.js")));
   const version = JSON.parse(await readFile(join(sdk, "package.json"), "utf8")).version;
   t.diagnostic(`Actual SDK ${version}; scripted stream; no model/network/real mutation tools`);
   const dir = await mkdtemp(join(tmpdir(), "pi-opencode-session-"));
