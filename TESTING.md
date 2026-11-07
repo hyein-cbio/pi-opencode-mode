@@ -23,7 +23,8 @@ npm test
 ```
 
 After dependencies are installed, the tests do not install SDKs or use model
-APIs. The release pin under test is `@opencode/codemode` **2.2.5**. Without
+APIs. The release pin under test is `@opencode/codemode` **2.2.6** with Effect
+**4.1.0**. Without
 `PI_OPENCODE_SDK`, the `isolated real Pi SDK session` suite explicitly skips.
 The boundary tests include literal 30-second
 timeout and delayed-cleanup probes, so the suite takes at least 30 seconds.
@@ -36,14 +37,14 @@ To use the SDK installed by `npm ci`:
 PI_OPENCODE_SDK="$PWD/node_modules/@earendil-works/pi-coding-agent" npm test
 ```
 
-Expected result: **93 passed, 0 skipped**, including the SDK suite's parent and
-ten subtests. To run only the session suite:
+Expected result: **115 passed, 0 skipped**, including the SDK suite's parent and
+eleven subtests. To run only the session suite:
 
 ```sh
 PI_OPENCODE_SDK="$PWD/node_modules/@earendil-works/pi-coding-agent" node --test test/session.test.js
 ```
 
-Expected result: **11 passed, 0 skipped**. You can also supply an absolute path to
+Expected result: **12 passed, 0 skipped**. You can also supply an absolute path to
 another installed SDK package directory. For an exact dependency-version test,
 use the clean-copy matrix below rather than mixing a local host installation
 with another SDK directory.
@@ -65,11 +66,19 @@ This opt-in command installs from npm. For each supported baseline it:
 
 It does not alter the source checkout's dependencies or personal Pi settings.
 The release pin this command installs and verifies is `@opencode/codemode`
-**2.2.5** with Effect **4.0.6**. On Node **v22.23.4**, `npm test` passed **82**
-tests, failed **0**, and skipped **1** (`isolated real Pi SDK session` without
-`PI_OPENCODE_SDK`). `npm run test:pi-versions` passed **3** tests and failed
-**0**, one full suite each for Pi **0.99.0**, **1.3.0**, and **1.4.0** against
-installed CodeMode **2.2.5**, with no skipped tests inside those suites.
+**2.2.6** with Effect **4.1.0**. The following counts describe PR #6's
+independent dependency-only baseline, before the local presentation/loading
+changes. On Node **v22.23.4** (Linux x64), `npm test`
+passed **83** tests, failed **0**, and skipped **1** (`isolated real Pi SDK
+session` without `PI_OPENCODE_SDK`). With the SDK from `npm ci`
+(`@earendil-works/pi-coding-agent` **1.3.0**), the same suite passed **94**,
+failed **0**, and skipped **0**. `npm run test:pi-versions` passed **3** and
+failed **0**: one full suite each for Pi **0.99.0**, **1.3.0**, and **1.4.0**
+against installed CodeMode **2.2.6** and Effect **4.1.0**, with matching Pi TUI
+versions. Each inner suite passed **94**, failed **0**, and skipped **0**.
+The same clean-copy inner suites also passed on Node **v22.19.0** and
+**v24.22.2** for those three Pi/TUI pairs. Hosted Modal CI for this pin has
+not run.
 
 To test one baseline (the same command used in each CI job):
 
@@ -352,6 +361,104 @@ Session tests create disposable cwd/agent directories, in-memory settings and
 history, and scripted assistant streams. Model-network discovery is disabled;
 only fake runtime credentials and safe in-memory host stubs are used. Native
 `codemode` is registered but never executed. No personal resources are loaded.
+
+## Local presentation/loading optimization verification — 2026-11-07
+
+Before rebasing onto PR #6, the performance changes were validated against
+CodeMode **2.2.5** / Effect **4.0.6** as recorded below. These are historical
+pre-rebase measurements, not verification of the current **2.2.6 / 4.1.0** pins.
+No upstream search-index patch was included. Source-checkout `node_modules`
+was not reinstalled: tests used exact dependencies in disposable copies instead.
+
+- On Node **22.23.1**, the complete offline-cache clean-copy matrix passed for
+  Pi/TUI **0.99.0 / 1.3.0 / 1.4.0**, including real-SDK sessions with no skips.
+  The same three versions also passed on Node **26.13.0** before the final
+  file-loader/oversized-whitespace regressions were added.
+- On Node **22.23.1**, the final suite with existing Pi/TUI **1.5.0** passed
+  **114 tests**, with no failures or skips. Session fixtures import TypeBox
+  directly rather than relying on the removed pi-ai Type re-export.
+- Deterministic tests count formatting/highlighting work, verify stable child
+  reuse and bounded cache entries, and exercise palette changes behind a stable
+  theme Proxy via `invalidate()`, source changes, resizing, expansion, raw
+  streaming/completion, oversized Unicode source and hook-replaced output.
+- Mock-timer tests prove immediate host dispatch/record mutation, 16ms frame
+  coalescing, synchronous final flush, detached snapshots, observer-error
+  isolation, concurrent-root independence and no post-completion callback.
+- Fresh-process module hooks prove registration/rejected preflight do not
+  resolve CodeMode/Effect. Additional tests cover actual Pi file/jiti loading,
+  shared cold imports with fresh execution state, abort-before/during loading,
+  and safely observed late import rejection without replay.
+
+A local warm synthetic comparison on Node **26.13.0** used actual Pi **1.5.0**
+tool components, 300 catalog entries and 64 immediate in-memory hosts, at width120. Thirty-six
+samples per variant, six warmups and seeded alternating order measured component
+setup + execution + final rendering. With partial component updates applied but
+terminal-line rendering deferred to the end, baseline/current median latency
+was **104.0 / 4.1ms** (p95 **113.8 / 5.2ms**), with **129 / 2** notifications.
+Rendering every partial frame was a separate heavier sensitivity case, not an
+observed terminal cadence. These are not model/API/real-terminal E2E timings,
+whole-application speedup ratios, confidence intervals or evidence that seconds
+of real-user delay have been eliminated. Streaming/output/import measurements
+were exploratory; no wall-clock thresholds are enforced by unit tests.
+
+The hosted Node **22.19.0 / 24.x** matrix was not dispatched for this local
+change. Existing CI still owns those release checks. No package publication,
+release, upstream issue or PR was performed.
+
+## PR #6 rebase verification — 2026-11-07
+
+The local presentation/loading changes now build on PR #6 head
+`101f98cc3c7dc7f22a3c5054fdec355655f569c2`, with CodeMode **2.2.6**, Effect
+**4.1.0** and Acorn **8.15.0**. The PR's lockfile, `require` preflight guard,
+legacy-engine selection and dependency-specific regression tests are preserved.
+Lazy-loading tests additionally assert that `require` (including shadowed names)
+and dynamic `import()` after a would-be host call do not even load the backend.
+
+- A fresh `npm ci --ignore-scripts` copy verified the actual dependency versions
+  and the same resolved Effect module path for both extension and CodeMode.
+- On Node **22.23.1** / macOS, PR #6 alone passed **94 tests**, no failures or
+  skips, with Pi/TUI **1.3.0**. With the performance changes, the full suite
+  passed **115 tests**, no failures or skips, on both Pi/TUI **1.3.0** and
+  **1.5.0**.
+- The complete clean-copy compatibility matrix on Node **22.23.1** also passed
+  Pi/TUI **0.99.0 / 1.3.0 / 1.4.0**, with actual CodeMode **2.2.6** and no
+  skipped SDK coverage. An initial offline attempt hit stale npm version
+  metadata; the normal registry-backed matrix then passed all three cells.
+- The source checkout's existing `node_modules` remains unchanged. It still
+  contains the old **2.2.0 / 4.0.1** installation, so run `npm ci` before
+  testing/deploying this checkout directly; the results above use isolated
+  matching dependency trees, not that stale installation.
+
+The same 300-tool/64-immediate-host synthetic component comparison described
+above, now with the PR #6 backend on both sides, measured median **105.6 / 3.8ms**
+and p95 **108.6 / 4.4ms** for PR-only versus PR+performance changes. Notification
+counts remained **129 / 2**. These are warm Node **26.13.0** / Pi **1.5.0** path
+measurements, not whole-app speedups or real-provider/physical-terminal E2E.
+Earlier **2.2.5 / 4.0.6** measurements remain explicitly historical above.
+No hosted Modal matrix, upstream search-index modification, new commit or
+remote publication was performed for this rebase.
+
+## 0.2.0 release preparation verification — 2026-11-07
+
+The manifest and both root lockfile version fields are **0.2.0**. Runtime pins
+remain CodeMode **2.2.6**, Effect **4.1.0** and Acorn **8.15.0**; no additional
+runtime implementation change was made for the version bump.
+
+After the bump, the full suite again passed **115 tests**, no failures or skips,
+on Node **22.23.1** with Pi/TUI **1.5.0** and the exact backend pins in an
+isolated tree. The complete clean-copy matrix also passed Pi/TUI
+**0.99.0 / 1.3.0 / 1.4.0**, with no skipped SDK coverage. The package regression
+now checks manifest/lockfile root version and dependency agreement, plus a
+matching changelog entry. The package dry-run identifies
+`pi-opencode-mode-0.2.0.tgz` and retains the intended 11-file package scope.
+
+The changelog records prepared changes, intentional UI cadence/loading behavior,
+pre-rebase versus post-rebase measurements and limitations. The README keeps
+previously published install commands explicitly separate from testing the
+prepared 0.2.0 checkout; the release checklist advances those commands only
+after publication is confirmed. Source commits do not imply publication: this
+preparation does not create tags, publish npm packages or create GitHub releases.
+Hosted CI and a live-model/TUI walkthrough remain explicit pre-publication checks.
 
 ## Additional release checks
 

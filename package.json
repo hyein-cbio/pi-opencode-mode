@@ -1,6 +1,6 @@
 {
   "name": "pi-opencode-mode",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "license": "MIT",
   "publishConfig": {
     "access": "public",
@@ -38,13 +38,13 @@
     ]
   },
   "scripts": {
-    "test": "node --test test/extension.test.js test/route.test.js test/preflight.test.js test/renderer.test.js test/call-log.test.js test/source-preview.test.js test/readme.test.js test/boundaries.test.js test/session.test.js",
+    "test": "node --test test/extension.test.js test/route.test.js test/preflight.test.js test/renderer.test.js test/renderer-performance.test.js test/lazy-loading.test.js test/call-log.test.js test/source-preview.test.js test/readme.test.js test/boundaries.test.js test/session.test.js",
     "test:pi-versions": "node --test test/pi-versions.test.js"
   },
   "dependencies": {
-    "@opencode/codemode": "2.2.5",
+    "@opencode/codemode": "2.2.6",
     "acorn": "8.15.0",
-    "effect": "4.0.6"
+    "effect": "4.1.0"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": ">=0.99.0 <2.0.0",

@@ -124,7 +124,8 @@ test("unsupported or uncertain syntax selects native without speculative executi
     'return 1n;', 'class X {} return new X();',
     'return new Proxy({}, {});', 'return globalThis;', 'eval("return 1");',
     'return {get value() { return 1; }};', 'return function* () { yield 1; };',
-    'import fs from "node:fs";', 'return import("node:fs");', 'return (',
+    'import fs from "node:fs";', 'return import("node:fs");', 'return require("url");',
+    'return typeof require;', 'const require = () => 1; return require();', 'return (',
   ]) assert.equal(select(code).route, "codemode", code);
 });
 

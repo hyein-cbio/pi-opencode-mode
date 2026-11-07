@@ -1,5 +1,3 @@
-import { CodeMode, Tool, toolError } from "@opencode/codemode";
-import { Effect } from "effect";
 import { Type } from "typebox";
 import { PREFLIGHT_LIMITS, checkOpenCodeCompatibility } from "./route.js";
 import { openCodeRenderers } from "./renderer.js";
@@ -48,7 +46,39 @@ async function callPiTool(ctx, name, input, signal) {
   return textOf(outcome?.result);
 }
 
-function codeModeTools(ctx, signal, calls) {
+// Load modules once, not a runtime: every execution still owns its tools,
+// permissions context, signals and call log. Registration/preflight stay cheap.
+async function loadBackend() {
+  const [{ CodeMode, Tool, toolError }, { Effect }] = await Promise.all([
+    import("@opencode/codemode"), import("effect"),
+  ]);
+  return { CodeMode, Tool, toolError, Effect };
+}
+
+function waitForBackend(getBackend, signal) {
+  signal?.throwIfAborted();
+  const pending = getBackend();
+  if (!signal) return pending;
+  // Aborting one waiter must not cancel/poison the shared module import. Attach
+  // both handlers even after abort so a late import rejection stays observed.
+  return new Promise((resolve, reject) => {
+    const abort = () => {
+      signal.removeEventListener("abort", abort);
+      reject(signal.reason);
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    pending.then((value) => {
+      signal.removeEventListener("abort", abort);
+      resolve(value);
+    }, (error) => {
+      signal.removeEventListener("abort", abort);
+      reject(error);
+    });
+    if (signal.aborted) abort();
+  });
+}
+
+function codeModeTools(ctx, signal, calls, { Tool, toolError, Effect }) {
   const tools = {};
   for (const tool of ctx?.tools ?? []) {
     const name = tool?.name;
@@ -169,8 +199,10 @@ function preflightError(preflight) {
   };
 }
 
-// Optional parser injection is for offline failure tests, never a guest argument.
-export function createOpenCodeModeExtension({ parseSource } = {}) {
+// Optional dependencies are for offline failure tests, never guest arguments.
+export function createOpenCodeModeExtension({ parseSource, loadRuntime = loadBackend } = {}) {
+  let backend;
+  const getBackend = () => backend ??= Promise.resolve().then(loadRuntime);
   return function openCodeModeExtension(pi) {
     pi.registerTool({
       name: TOOL_NAME,
@@ -206,10 +238,13 @@ export function createOpenCodeModeExtension({ parseSource } = {}) {
           decision: "selected", route: preflight.supported ? TOOL_NAME : "codemode",
           reasons: preflight.reasons, executesSource: false,
         });
-        const finish = (result) => ({
-          ...result,
-          details: { ...result.details, calls: calls.snapshot(), preflight, route, durationMs: performance.now() - startedAt },
-        });
+        const finish = (result) => {
+          calls.close();
+          return {
+            ...result,
+            details: { ...result.details, calls: calls.snapshot(), preflight, route, durationMs: performance.now() - startedAt },
+          };
+        };
         if (!preflight.supported) {
           // Built-in codemode is model-only: do not bypass Pi's invocation boundary.
           return finish(renderResult({
@@ -220,7 +255,10 @@ export function createOpenCodeModeExtension({ parseSource } = {}) {
         }
         calls.publish();
         try {
-          const runtime = CodeMode.make({ tools: codeModeTools(ctx, signal, calls), limits: LIMITS });
+          const modules = await waitForBackend(getBackend, signal);
+          signal?.throwIfAborted();
+          const { CodeMode, Effect } = modules;
+          const runtime = CodeMode.make({ tools: codeModeTools(ctx, signal, calls, modules), limits: LIMITS });
           const result = await Effect.runPromise(runtime.execute(code), signal ? { signal } : undefined);
           return finish(renderResult(result));
         } catch (error) {
@@ -229,6 +267,9 @@ export function createOpenCodeModeExtension({ parseSource } = {}) {
             error: { kind: "ExecutionFailure", message: signal?.aborted ? "Script interrupted" : message(error) },
             toolCalls: [],
           }));
+        } finally {
+          // Also dispose presentation timers if result formatting itself throws.
+          calls.close();
         }
       },
     });

@@ -188,6 +188,44 @@ test("for-in is rejected before earlier host calls or runtime construction", asy
   assert.deepEqual(host.deletedPrototype, ["p"]);
 });
 
+test("require and dynamic import stay rejected before host effects", async () => {
+  const sources = [
+    'return require("url");',
+    'return require("crypto");',
+    'return typeof require;',
+    'const require = () => 1; return require("url");',
+    'await tools.write({}); return require("url");',
+    'await tools.write({}); return import("url");',
+    'return import("node:crypto");',
+  ];
+  for (const source of sources) {
+    const params = { code: source };
+    const result = await registeredTool().execute("modules", params, undefined, undefined, forbiddenContext);
+    assert.equal(result.isError, true, source);
+    assert.equal(result.details.preflight.supported, false, source);
+    assert.equal(result.details.error.kind, "NativeCodemodeRequired", source);
+    assert.match(result.details.preflight.reasons[0], /^(native-name:require|unsupported-syntax:ImportExpression)$/u, source);
+    assert.deepEqual(result.details.toolCalls, [], source);
+    assert.deepEqual(result.details.calls, [], source);
+    assert.equal(params.code, source);
+  }
+  // Property names are data. The identifier require is what 2.2.6 binds.
+  const property = await registeredTool().execute("require-property", {
+    code: "return ({ require: 1 }).require;",
+  }, undefined, undefined, { tools: [] });
+  assert.equal(property.details.ok, true, property.content?.[0]?.text);
+  assert.equal(JSON.parse(property.content[0].text), 1);
+
+  const runtime = CodeMode.make({ limits: { timeoutMs: 5_000, maxToolCalls: 4, maxOutputBytes: 4_096 } });
+  assert.equal("program" in runtime, false);
+  assert.equal("resume" in runtime, false);
+  assert.deepEqual(await installedCodeModeValue('return typeof require;'), "function");
+  assert.deepEqual(await installedCodeModeValue('const m = require("url"); return Object.keys(m);'), ["URL", "URLSearchParams"]);
+  assert.deepEqual(await installedCodeModeValue('const m = require("util"); return Object.keys(m);'), ["TextEncoder", "TextDecoder"]);
+  assert.equal(await installedCodeModeValue('return typeof require("crypto");'), "object");
+  assert.equal(await installedCodeModeValue('return typeof import("url");'), "object");
+});
+
 test("regex literal methods and flags execute in the installed OpenCode runtime", async () => {
   for (const [code, expected] of [
     ['return /x/.test("x");', true],

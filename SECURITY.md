@@ -3,7 +3,9 @@
 ## Supported versions
 
 Security fixes target the latest released version, currently **0.1.5**.
-See [CHANGELOG.md](CHANGELOG.md) for release history.
+Version **0.2.0** is in release preparation, not yet a published release;
+reports about that source revision are also welcome. See
+[CHANGELOG.md](CHANGELOG.md) for the prepared changes and release history.
 
 ## Reporting a vulnerability
 

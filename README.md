@@ -2,7 +2,12 @@
 
 A small Pi extension that leaves native `codemode` in place and lets you choose OpenCode CodeMode too.
 
-It registers **`codemode_o`**, backed by `@opencode/codemode` 2.2.5: another execution option for short, self-contained JavaScript-like programs that call Pi tools. Host calls retain Pi's validation, permission/result hooks, and nested-call audit; cancellation waits for host cleanup, and output keeps bounded, visible diagnostics.
+**0.2.0 release preparation:** this README describes the prepared 0.2.0 source.
+The 0.2.0 npm package and Git tag have not been published by this change.
+See the [0.2.0 change notes](CHANGELOG.md) for dependency support, performance
+work, intentional display changes and verification limits.
+
+It registers **`codemode_o`**, backed by `@opencode/codemode` 2.2.6 and Effect 4.1.0: another execution option for short, self-contained JavaScript-like programs that call Pi tools. Host calls retain Pi's validation, permission/result hooks, and nested-call audit; cancellation waits for host cleanup, and output keeps bounded, visible diagnostics.
 
 Short programs can be quick: see the [benchmark snapshot](#benchmark-snapshot) for measured comparisons with native `codemode`. Both can batch tool calls; this extension lets you use the OpenCode interpreter in Pi without replacing the native tool. Performance depends on the workload, and lower latency does not imply stronger isolation. You choose the tool: preflight can reject an unsuitable OpenCode program, but never switches tools or falls back automatically.
 
@@ -25,7 +30,19 @@ interpreter choice, not an OpenCode server or a replacement Pi CLI.
 
 ## Install
 
-Install the versioned npm package in Pi:
+To test **0.2.0 from an existing checkout containing these changes**, install its
+exact dependencies and load that checkout directly:
+
+```sh
+npm ci
+pi -e "$PWD" --tools read,find,codemode,codemode_o
+```
+
+Reload/restart Pi after updating the checkout. The commands below deliberately
+remain pinned to the previous published **0.1.5** release until 0.2.0 is
+published; 0.1.5 does not include the new 0.2.0 changes described here.
+
+Install that published npm package in Pi:
 
 ```sh
 pi install npm:pi-opencode-mode@0.1.5
@@ -51,7 +68,9 @@ into your project.
 
 Requires **Node.js >= 22.19.0**, npm, Git, and **Pi >= 0.99.0, < 2.0.0** with a configured model/provider. Check `node --version` and `pi --version`; if you are new to Pi, see its [quickstart](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/quickstart.md). In Pi, `/login` configures a provider and `/model` chooses a model. The extension does not need an OpenCode account or server; asking Pi to call it still uses your configured model.
 
-1. **Install from source for the walkthrough.** Use the release tag so the examples match this version.
+1. **Install from source for the walkthrough.** The tag below is the published
+   **0.1.5** baseline. To exercise the prepared **0.2.0** rendering and dependency
+   changes, use the existing-checkout instructions above instead of this tag.
 
    ```sh
    git clone --branch v0.1.5 https://github.com/hyein-cbio/pi-opencode-mode.git
@@ -114,7 +133,7 @@ milliseconds** (lower is better).
 - `pi-opencode-mode` **0.0.1** at revision
   [`53b9dd9`](https://github.com/hyein-cbio/pi-opencode-mode/tree/53b9dd937ad53cd3558b086ab21e812780524d5a),
   OpenCode CodeMode **2.1.0**, Effect **4.0.1**. This is a **historical snapshot,
-  not a fresh measurement of 0.1.5**; later code changes have not been remeasured
+  not a fresh measurement of 0.2.0**; later code changes have not been remeasured
   in this table.
 - **20 warm samples**, 4 warmups, and one first-invocation control per eligible
   case/tool. p95 is nearest-rank. The clock spans root tool execution, including
@@ -237,7 +256,7 @@ After the LLM explicitly calls `codemode_o`, `checkOpenCodeCompatibility(code)` 
 The historical `selectCodemodeRoute` helper and `ROUTE_LIMITS` alias remain for API compatibility only; the extension does not call that helper. Its `requested: "auto"` result is a legacy static advisory, not the tool-selection policy.
 
 - OpenCode candidates are at most **8,192 UTF-8 source bytes**, **100 lines**, **2,000 AST nodes**, and **64 AST levels**. Acorn parses source without executing it; a conservative compatibility allowlist rejects unknown syntax.
-- Pi globals (`text`, `image`, `exit`, `store`, `load`, `ALL_TOOLS`, `searchTools`, `describeTool`, `describeNamespace`, `models`), options comments (`@options:`), classes, BigInt literals, generators, accessors, and uncertain constructors are rejected by the OpenCode preflight. `switch`/`case` and `new Date`, `new RegExp`, `new Map`, `new Set`, `new URL`, `new EvalError`, and `new URIError` are admitted because CodeMode 2.2.5 runs them. Direct `String.raw` tagged templates are also admitted, with substitutions subject to the same preflight checks as other expressions; arbitrary tags stay rejected. Regular-expression literals (such as `/pattern/g`) are supported; malformed patterns or flags fail as source syntax errors. Other constructors, including `new Promise` and `new URLSearchParams`, stay rejected. `for...in` also stays rejected before execution: CodeMode 2.2.5 visits inherited enumerable string keys and still visits keys deleted during iteration. Comments, strings, and ordinary property names do not count as global references; shadowed Pi names conservatively stay native.
+- Pi globals (`text`, `image`, `exit`, `store`, `load`, `ALL_TOOLS`, `searchTools`, `describeTool`, `describeNamespace`, `models`), options comments (`@options:`), classes, BigInt literals, generators, accessors, and uncertain constructors are rejected by the OpenCode preflight. `switch`/`case` and `new Date`, `new RegExp`, `new Map`, `new Set`, `new URL`, `new EvalError`, and `new URIError` are admitted because CodeMode 2.2.6 runs them. Direct `String.raw` tagged templates are also admitted, with substitutions subject to the same preflight checks as other expressions; arbitrary tags stay rejected. Regular-expression literals (such as `/pattern/g`) are supported; malformed patterns or flags fail as source syntax errors. Other constructors, including `new Promise` and `new URLSearchParams`, stay rejected. `for...in` also stays rejected before execution: CodeMode 2.2.6 visits inherited enumerable string keys and still visits keys deleted during iteration. `require` stays rejected before execution, including after a would-be host call: CodeMode 2.2.6 binds it and can load built-in globals such as `url`, `util`, and `crypto`. Dynamic `import()` stays outside the syntax allowlist even though that interpreter can run it. The extension keeps the default legacy interpreter and does not pass `engine: "vm"`. Comments, strings, and ordinary property names do not count as global references; shadowed Pi names conservatively stay native.
 - This is a compatibility guard, **not** a tool selector, full JavaScript semantic validator, cost estimator, or security boundary. Tool availability, values, built-in methods, runtime failures, and actual running time cannot be proven statically. Rejection does not guarantee that native Pi supports the program either.
 - Native Pi `codemode` is **model-only**, so this extension cannot invoke it through `ctx.executeTool`. When preflight rejects a compatibility limitation, `codemode_o` returns `NativeCodemodeRequired` **before constructing the runtime or calling any host tool**. The caller must invoke the active built-in `codemode` itself, using its raw-source input contract. If it is disabled, report that native `codemode` is needed; this extension does not enable it. No tool name rewriting or permission bypass is used.
 - Invalid source in Acorn's script context returns `SourceSyntaxError` (`invalid-script-syntax`), not a native recommendation. Unexpected parser exceptions return `PreflightParserError` (`internal-parser-error`). Both stop before runtime construction, preserve a bounded original parser message without a stack or source excerpt, and never rewrite or replay source. Syntax errors should be fixed before running; internal parser failures should be reported.
@@ -266,6 +285,13 @@ muted `Took 0.1s` footer. Use Pi's configured tool-expansion shortcut for detail
 Limits count wrapped terminal lines, including long JSON and Unicode. Warnings
 and incomplete-output indicators remain visible above collapsed data.
 
+- **Cached source, unchanged execution.** Completed source highlighting and
+  output layout are cached per row, with theme/component invalidation and
+  width-aware wrapping. While arguments stream, a raw preview avoids repeated
+  parsing/highlighting; completed arguments restore the formatted view. Source
+  beyond 8,192 UTF-8 bytes uses a bounded raw preview with a visible notice;
+  expansion shows the full unhighlighted original. No display limit changes the
+  executed/stored source or its error locations.
 - **Readable source, unchanged execution.** A display-only layout pass separates
   multi-element arrays (including batched tool calls) and block statements with
   two-space indentation. It preserves literal/comment/template contents and
@@ -288,7 +314,11 @@ and incomplete-output indicators remain visible above collapsed data.
   Cancelled attempts are not counted as failures. This does not change the
   script's success/error result.
 - **Live and restored records.** `onUpdate` publishes detached snapshots during
-  execution; final `details.calls` retains up to 64 records after host cleanup.
+  execution, coalesced on a 16ms timer independently of Pi's terminal paint
+  scheduler. Host dispatch and record/status changes are immediate; very short
+  calls may skip intermediate visual states. Completion flushes pending updates
+  immediately and cancels the timer, including failure/cancellation paths.
+  Final `details.calls` retains up to 64 records after host cleanup.
   Each record keeps a name (128 UTF-8 bytes), argument preview (1,024 bytes),
   status, duration and optional error preview (512 bytes), never result bodies.
   Arguments are depth/item/string-limited before serialization, so expanded
@@ -298,14 +328,21 @@ and incomplete-output indicators remain visible above collapsed data.
   interpreter-only discovery is not fabricated as a timed host call.
 
 Each result records monotonic elapsed milliseconds in `details.durationMs`,
-including preflight, execution, and awaited host cleanup, on success, failure,
+including preflight, first-use backend loading, execution, and awaited host cleanup, on success, failure,
 cancellation, and native-route rejection. The renderer prefers Pi's own recorded
 row duration when available (which also includes Pi's surrounding hooks), and
 uses the persisted extension duration for older SDKs/restored rows. During a
 partial render, elapsed time is computed on redraw; no polling timer is created.
 Legacy results without timing metadata simply omit the footer.
 
-This is a **presentation-only** alignment: model-visible `content` remains the
+CodeMode/Effect modules load on the first preflight-approved execution, not at
+registration or for rejected source. Concurrent calls share only the module-load
+promise, never a runtime, callable catalog, context, signal or call log. Cancelling
+one loading caller does not cancel other waiters or permit later host activity
+for the cancelled call. This moves one-time startup cost to first use; it is not
+a steady-state execution speedup.
+
+These rendering changes are **presentation-only**: model-visible `content` remains the
 bounded JSON/log/diagnostic text described above, without an extra execution
 header. JSON encoding, error/warning semantics, routing, output budgets,
 cancellation, and the OpenCode runtime are unchanged. Renderers use only public
@@ -325,7 +362,7 @@ Real-session tests use disposable directories, in-memory history/settings, scrip
 
 ## Project information
 
-- [Changes and 0.1.5 release notes](CHANGELOG.md)
+- [0.2.0 change notes (release preparation) and release history](CHANGELOG.md)
 - [Security policy and private reporting](SECURITY.md)
 - [Bug reports and feature requests](https://github.com/hyein-cbio/pi-opencode-mode/issues)
 

@@ -1,11 +1,15 @@
-# Maintainer release checklist — 0.1.5
+# Maintainer release checklist — 0.2.0
 
 Preparation does not publish anything. Repository visibility, npm publication,
 and release/tag creation are explicit maintainer actions.
 
 ## Before publishing
 
-- [ ] Review the diff; ensure `package.json` and `package-lock.json` both say `0.1.5`.
+- [ ] Review the diff; ensure `package.json`, the lockfile top level and its root
+      package entry all say `0.2.0`, and runtime pins are CodeMode `2.2.6`,
+      Effect `4.1.0`, and Acorn `8.15.0`.
+- [ ] Check that the 0.2.0 notes distinguish synthetic path measurements from
+      whole-app latency and describe coalesced frames/first-use backend loading.
 - [ ] Run `npm ci`, `npm audit`, and `npm run test:pi-versions`.
 - [ ] Configure `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET` Actions secrets, migrate
       required checks to `Node/Pi compatibility on Modal`, and confirm its six
@@ -21,10 +25,12 @@ and release/tag creation are explicit maintainer actions.
       repository is public, and verify the reporting link in `SECURITY.md` works.
 - [ ] For npm publication, remove `private: true`, verify the npm package name
       is available to your account, and recheck the manifest/lockfile and tarball.
-- [ ] Mark the `0.1.5` changelog entry released, create the `v0.1.5` tag and GitHub
-      release, and publish the intended package version to npm.
-- [ ] Verify installation from the published source, then update the README with
-      the confirmed npm and/or tagged Git install command.
+- [ ] Mark the `0.2.0 — Unreleased` changelog entry released with the actual date,
+      create the `v0.2.0` tag and GitHub release, and publish the intended package
+      version to npm.
+- [ ] Verify installation from the published source, then advance the README's
+      previous-release commands to the confirmed `0.2.0` npm/tag commands and
+      update its preparation notice and the supported version in `SECURITY.md`.
 
 Do not advertise an npm package or tag before it exists. No workflow in this
 repository publishes packages or changes repository visibility.
