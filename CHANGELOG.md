@@ -4,6 +4,15 @@
 
 ### Changed
 
+- Use `@opencode/codemode` 2.2.6. Acorn stays 8.15.0. Effect moves from 4.0.6
+  to 4.1.0 to match the published exact dependency, so the extension and
+  CodeMode load one Effect instance. The default engine remains the legacy
+  interpreter; the experimental bytecode VM is not enabled. `require` can load
+  built-in globals (`url`, `util`, `crypto`), and dynamic `import()` runs if it
+  reaches the interpreter, so preflight rejects both before runtime
+  construction or host effects. `for...in` behavior is unchanged and stays
+  rejected. The tool bridge, limits, and result contract are unchanged.
+
 - Use `@opencode/codemode` 2.2.5. Acorn stays 8.15.0. Effect moves from 4.0.1
   to 4.0.6 to match the published dependency. The 2.2.5 interpreter visits
   inherited enumerable keys in `for...in` and still visits keys deleted during

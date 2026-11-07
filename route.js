@@ -8,8 +8,9 @@ export const ROUTE_LIMITS = PREFLIGHT_LIMITS;
 
 // Intentionally narrower than the interpreter. Unknown/new syntax is rejected;
 // this is a static compatibility check, not routing, semantic proof, or authorization.
-// Keep for...in out: CodeMode 2.2.5 visits inherited enumerable keys and still
+// Keep for...in out: CodeMode 2.2.6 visits inherited enumerable keys and still
 // visits keys deleted during iteration.
+// Keep require out: 2.2.6 binds it and can load built-in globals (url, util, crypto).
 const SYNTAX = new Set([
   "Program", "ExpressionStatement", "EmptyStatement", "BlockStatement", "ReturnStatement",
   "VariableDeclaration", "VariableDeclarator", "IfStatement", "ForStatement", "ForOfStatement",
@@ -24,7 +25,7 @@ const SYNTAX = new Set([
 ]);
 const NATIVE_NAMES = new Set([
   "text", "image", "exit", "store", "load", "ALL_TOOLS", "searchTools", "describeTool",
-  "describeNamespace", "models", "globalThis", "eval", "Function", "BigInt", "Proxy", "Reflect",
+  "describeNamespace", "models", "globalThis", "eval", "Function", "require", "BigInt", "Proxy", "Reflect",
 ]);
 const CONSTRUCTORS = new Set([
   "Error", "TypeError", "RangeError", "SyntaxError", "ReferenceError", "EvalError", "URIError",
