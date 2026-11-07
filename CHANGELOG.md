@@ -1,10 +1,10 @@
 # Changelog
 
-## 0.2.0 — Unreleased
+## 0.2.0 — 2026-11-07
 
-Prepared on **2026-11-07**. This entry describes the 0.2.0 source/package
-preparation; the npm package, Git tag and GitHub release have not been published
-as part of this work.
+CodeMode **2.2.6** support and local rendering/loading performance improvements,
+with the existing execution, permission, cancellation and output contracts
+preserved. See the verification scope and intentional display changes below.
 
 ### Dependency support and execution safety
 
@@ -86,6 +86,11 @@ as part of this work.
   no failures or skips, on Node **22.23.1** / macOS using Pi/TUI **1.3.0** and
   **1.5.0**. The clean-copy matrix also passed Pi/TUI **0.99.0 / 1.3.0 / 1.4.0**
   with actual CodeMode **2.2.6** / Effect **4.1.0** and no skipped SDK coverage.
+- Release-time `npm audit --omit=peer` reported **0** known vulnerabilities in
+  the runtime dependency tree. The full locked Pi **1.3.0** test-peer tree
+  reported **2 moderate / 1 high** entries via Pi, `minimatch` and `undici`.
+  Those peer packages are not bundled in the extension tarball; keep the host
+  Pi installation updated independently. This is not a security certification.
 - Regression coverage includes deterministic formatting/highlight work counts,
   stable child reuse, cache invalidation/eviction, Unicode and raw-source
   preservation, timer coalescing/final flush, no late updates, concurrent-root
@@ -103,16 +108,18 @@ as part of this work.
   perceived delay are eliminated. The upstream search-index optimization is
   **not included**. See [TESTING.md](TESTING.md) for detailed evidence.
 
-### Known limits and pending release checks
+### Known limits and validation scope
 
 - The interpreter is not an OS or memory-isolation sandbox. Host cancellation
   remains cooperative; a non-settling host may delay delivery beyond the
   nominal 30-second interruption deadline. Completed effects cannot be undone.
 - MCP readiness coordination, broad JavaScript support and live model behavior
   are unchanged; choose native codemode upfront where documented.
-- Hosted Node **22.19.0 / 24.x** CI and a configured-model/TUI walkthrough remain
-  release checks. No live-provider test, npm publication or tag creation is
-  implied by the local results above.
+- Hosted Node **22.19.0 / 24.x** × Pi/TUI **0.99.0 / 1.3.0 / 1.4.0**
+  [CI passed](https://github.com/hyein-cbio/pi-opencode-mode/actions/runs/42400320558)
+  on the merged runtime revision. A configured-model/physical-TUI walkthrough
+  was not performed; scripted sessions and component tests are not a substitute
+  for a live-provider E2E guarantee.
 
 ## 0.1.5 — 2026-10-28
 

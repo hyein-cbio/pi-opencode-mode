@@ -460,6 +460,28 @@ after publication is confirmed. Source commits do not imply publication: this
 preparation does not create tags, publish npm packages or create GitHub releases.
 Hosted CI and a live-model/TUI walkthrough remain explicit pre-publication checks.
 
+## 0.2.0 hosted release verification — 2026-11-07
+
+The [merged-runtime CI run](https://github.com/hyein-cbio/pi-opencode-mode/actions/runs/42400320558)
+passed on `fbb961aabc22e651f8cc59b5d5489bf4ea3c9b23`, including the full six-cell
+Node **22.19.0 / 24.x** × Pi/TUI **0.99.0 / 1.3.0 / 1.4.0** Modal matrix and
+package inspection. This supersedes the pending-hosted-CI status in the earlier
+preparation/rebase records above; those records are retained as historical
+local evidence. Release finalization changes documentation only, not runtime
+sources or dependency pins.
+
+Final isolated release checks on Node **22.23.1** / Pi **1.3.0** passed the
+full **115-test** suite without skips. `npm audit --omit=peer` reported **0**
+known runtime-tree vulnerabilities. Full audit of the locked Pi **1.3.0** peer
+tree reported **2 moderate / 1 high** entries via Pi, `minimatch` and `undici`.
+These host/test packages are not bundled in the 11-file tarball; no automatic
+host dependency upgrade or audit-fix rewrite was applied. Keep Pi updated
+independently of the extension.
+
+A configured-model/physical-TUI walkthrough was not performed. The release
+retains the documented cooperative-cancellation, memory/isolation and
+MCP-readiness limits; passing CI is not a live-provider E2E guarantee.
+
 ## Additional release checks
 
 ```sh

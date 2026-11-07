@@ -2,10 +2,9 @@
 
 A small Pi extension that leaves native `codemode` in place and lets you choose OpenCode CodeMode too.
 
-**0.2.0 release preparation:** this README describes the prepared 0.2.0 source.
-The 0.2.0 npm package and Git tag have not been published by this change.
-See the [0.2.0 change notes](CHANGELOG.md) for dependency support, performance
-work, intentional display changes and verification limits.
+**Version 0.2.0** combines CodeMode 2.2.6 support with rendering and loading
+performance improvements. See the [release notes](CHANGELOG.md) for dependency
+support, intentional display changes, measurements and verification limits.
 
 It registers **`codemode_o`**, backed by `@opencode/codemode` 2.2.6 and Effect 4.1.0: another execution option for short, self-contained JavaScript-like programs that call Pi tools. Host calls retain Pi's validation, permission/result hooks, and nested-call audit; cancellation waits for host cleanup, and output keeps bounded, visible diagnostics.
 
@@ -30,28 +29,25 @@ interpreter choice, not an OpenCode server or a replacement Pi CLI.
 
 ## Install
 
-To test **0.2.0 from an existing checkout containing these changes**, install its
-exact dependencies and load that checkout directly:
+To use **0.2.0 from an existing source checkout**, install its exact dependencies
+and load that checkout directly:
 
 ```sh
 npm ci
 pi -e "$PWD" --tools read,find,codemode,codemode_o
 ```
 
-Reload/restart Pi after updating the checkout. The commands below deliberately
-remain pinned to the previous published **0.1.5** release until 0.2.0 is
-published; 0.1.5 does not include the new 0.2.0 changes described here.
-
-Install that published npm package in Pi:
+Reload/restart Pi after updating the checkout. Alternatively, install the
+versioned npm package in Pi:
 
 ```sh
-pi install npm:pi-opencode-mode@0.1.5
+pi install npm:pi-opencode-mode@0.2.0
 ```
 
 Or install the tagged Git source:
 
 ```sh
-pi install git:github.com/hyein-cbio/pi-opencode-mode@v0.1.5
+pi install git:github.com/hyein-cbio/pi-opencode-mode@v0.2.0
 ```
 
 Restart Pi after installation. To explicitly enable both code tools:
@@ -68,12 +64,11 @@ into your project.
 
 Requires **Node.js >= 22.19.0**, npm, Git, and **Pi >= 0.99.0, < 2.0.0** with a configured model/provider. Check `node --version` and `pi --version`; if you are new to Pi, see its [quickstart](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/quickstart.md). In Pi, `/login` configures a provider and `/model` chooses a model. The extension does not need an OpenCode account or server; asking Pi to call it still uses your configured model.
 
-1. **Install from source for the walkthrough.** The tag below is the published
-   **0.1.5** baseline. To exercise the prepared **0.2.0** rendering and dependency
-   changes, use the existing-checkout instructions above instead of this tag.
+1. **Install from source for the walkthrough.** Use the **v0.2.0** release tag
+   so the examples and dependency pins match this version.
 
    ```sh
-   git clone --branch v0.1.5 https://github.com/hyein-cbio/pi-opencode-mode.git
+   git clone --branch v0.2.0 https://github.com/hyein-cbio/pi-opencode-mode.git
    cd pi-opencode-mode
    npm ci
    ```
@@ -362,7 +357,7 @@ Real-session tests use disposable directories, in-memory history/settings, scrip
 
 ## Project information
 
-- [0.2.0 change notes (release preparation) and release history](CHANGELOG.md)
+- [0.2.0 release notes and release history](CHANGELOG.md)
 - [Security policy and private reporting](SECURITY.md)
 - [Bug reports and feature requests](https://github.com/hyein-cbio/pi-opencode-mode/issues)
 
