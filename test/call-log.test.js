@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { createOpenCodeModeExtension } from "../index.js";
+import { CALL_UPDATE_INTERVAL_MS, createCallLog } from "../call-log.js";
 
 function tool() {
   let definition;
@@ -11,14 +12,26 @@ function tool() {
 const catalog = [{ name: "host", parameters: { type: "object" } }];
 const response = (text) => ({ result: { content: [{ type: "text", text }] } });
 
-test("parallel duplicate names publish detached running and settled rows in invocation order", async () => {
+test("parallel duplicate names publish detached running and settled rows in invocation order", { timeout: 5000 }, async () => {
   const updates = [];
   const input = 'return await Promise.allSettled([tools.host({id:1}),tools.host({id:2})]);';
   const params = { code: input };
-  const result = await tool().execute("parallel", params, undefined, (update) => updates.push(update), {
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  let running;
+  const visible = new Promise((resolve) => { running = resolve; });
+  const pending = tool().execute("parallel", params, undefined, (update) => {
+    updates.push(update);
+    if (update.details.calls.length === 2 && update.details.calls.every((call) => call.status === "running")) running();
+  }, {
     tools: catalog,
-    async executeTool(_name, args) { await delay(args.id === 1 ? 20 : 5); return response(String(args.id)); },
+    async executeTool(_name, args) { await gate; return response(String(args.id)); },
   });
+  // Hold both hosts open until a live frame, rather than assuming every <16ms
+  // intermediate state must be displayed. Final records still retain all calls.
+  await visible;
+  release();
+  const result = await pending;
   assert.equal(params.code, input);
   assert.deepEqual(updates[0], { content: [], details: { calls: [] } });
   assert.ok(updates.some((update) => update.details.calls.length === 2 && update.details.calls.every((call) => call.status === "running")));
@@ -126,6 +139,96 @@ test("stored argument and error previews are bounded without retaining host resu
   });
   assert.equal(many.details.calls.length, 64);
   assert.equal(many.content[0].text, "42");
+});
+
+test("call-log batches frames without delaying host dispatch and flushes before the next tick", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const updates = [], releases = [];
+  const log = createCallLog((update) => updates.push(update), 64);
+  log.publish();
+  const runs = [1, 2].map((id) => log.run("host", { id }, undefined,
+    () => new Promise((resolve) => releases.push(resolve))));
+  assert.equal(releases.length, 2, "hosts start immediately, not after the UI timer");
+  assert.equal(updates.length, 1);
+  t.mock.timers.tick(CALL_UPDATE_INTERVAL_MS - 1);
+  assert.equal(updates.length, 1);
+  t.mock.timers.tick(1);
+  assert.equal(updates.length, 2);
+  assert.ok(updates[1].details.calls.every((call) => call.status === "running"));
+  releases.forEach((release) => release(42));
+  assert.deepEqual(await Promise.all(runs), [42, 42]);
+  assert.equal(updates.length, 2, "settlement notifications stay coalesced until flush");
+  log.close();
+  assert.equal(updates.length, 3);
+  assert.ok(updates.at(-1).details.calls.every((call) => call.status === "ok"));
+  assert.ok(updates[1].details.calls.every((call) => call.status === "running"), "earlier snapshots stay detached");
+  updates.at(-1).details.calls[0].status = "tampered";
+  assert.equal(log.snapshot()[0].status, "ok");
+  log.close();
+  log.publish();
+  t.mock.timers.tick(1000);
+  assert.equal(updates.length, 3, "no callback after close, even if closed twice");
+});
+
+test("64 immediate hosts keep all records but only initial and final frames", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const updates = [];
+  const log = createCallLog((update) => updates.push(update), 64);
+  log.publish();
+  await Promise.all(Array.from({ length: 64 }, (_, id) => log.run("host", { id }, undefined, async () => id)));
+  assert.equal(updates.length, 1);
+  log.close();
+  assert.equal(updates.length, 2);
+  assert.equal(updates[1].details.calls.length, 64);
+  assert.deepEqual(updates[1].details.calls.map((call) => JSON.parse(call.args).id), Array.from({ length: 64 }, (_, i) => i));
+  assert.ok(updates[1].details.calls.every((call) => call.status === "ok"));
+  t.mock.timers.tick(1000);
+  assert.equal(updates.length, 2);
+});
+
+test("scheduled observer failures/rejections stay isolated and missing observers schedule nothing", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  for (const observer of [() => { throw new Error("UI failed"); }, async () => { throw new Error("async UI failed"); }]) {
+    const log = createCallLog(observer, 64);
+    log.publish();
+    let release;
+    const pending = log.run("host", {}, undefined, () => new Promise((resolve) => { release = resolve; }));
+    t.mock.timers.tick(CALL_UPDATE_INTERVAL_MS);
+    release("ok");
+    assert.equal(await pending, "ok");
+    log.close();
+    assert.equal(log.snapshot()[0].status, "ok");
+  }
+  t.mock.timers.reset();
+  t.mock.method(globalThis, "setTimeout", () => assert.fail("no observer needs no timer"));
+  const log = createCallLog(undefined, 64);
+  log.publish();
+  assert.equal(await log.run("host", {}, undefined, async () => 42), 42);
+  log.close();
+});
+
+test("coalesced logs are root-local and retain errors/cancellation after cleanup", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const a = [], b = [], aborted = new AbortController();
+  const first = createCallLog((update) => a.push(update), 64);
+  const second = createCallLog((update) => b.push(update), 64);
+  first.publish(); second.publish();
+  const failure = first.run("denied", {}, undefined, () => { throw new Error("denied"); });
+  await assert.rejects(failure, /denied/);
+  let reject, cleaned = false;
+  const pending = second.run("slow", {}, aborted.signal, () => new Promise((_resolve, fail) => { reject = fail; }).finally(() => { cleaned = true; }));
+  first.close();
+  assert.equal(a.at(-1).details.calls[0].status, "error");
+  assert.equal(b.length, 1);
+  t.mock.timers.tick(CALL_UPDATE_INTERVAL_MS);
+  assert.equal(b.at(-1).details.calls[0].status, "running");
+  aborted.abort();
+  reject(new Error("aborted"));
+  await assert.rejects(pending, /aborted/);
+  assert.equal(cleaned, true);
+  second.close();
+  assert.equal(b.at(-1).details.calls[0].status, "cancelled");
+  assert.equal(a.length, 2);
 });
 
 test("preflight rejection has no fabricated call rows or running notifications", async () => {

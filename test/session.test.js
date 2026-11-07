@@ -247,19 +247,34 @@ test("isolated real Pi SDK session", { skip: !sdk && "set PI_OPENCODE_SDK to a l
       assert.equal(state.finished, 0);
     });
     await t.test("normal parallel calls publish live rows and persist metadata without changing source", async () => {
-      const code = 'return await Promise.all([tools.safe_slow({ms: 5}), tools.safe_slow({ms: 5})]);';
+      // Live frames are coalesced; use work longer than a frame, not a 5ms
+      // race that implicitly requires displaying every intermediate state.
+      const code = 'return await Promise.all([tools.safe_slow({ms: 50}), tools.safe_slow({ms: 50})]);';
       const result = await run(code);
       assert.equal(result.content[0].text, '["slow","slow"]');
       assert.equal(result.nestedCalls.complete, true);
       assert.ok(result.nestedCalls.calls.every((call) => call.status === "ok"));
       assert.equal(result.details.calls.length, 2);
       assert.ok(result.details.calls.every((call) => call.name === "safe_slow" && call.status === "ok" && call.durationMs >= 0));
-      assert.deepEqual(result.details.calls.map((call) => JSON.parse(call.args)), [{ ms: 5 }, { ms: 5 }]);
+      assert.deepEqual(result.details.calls.map((call) => JSON.parse(call.args)), [{ ms: 50 }, { ms: 50 }]);
       const updates = callUpdates.filter((update) => update.id === result.toolCallId);
       assert.ok(updates.some((update) => update.calls?.length === 2 && update.calls.every((call) => call.status === "running")));
       assert.ok(updates.some((update) => update.calls?.length === 2 && update.calls.every((call) => call.status === "ok")));
       const message = session.messages.find((entry) => entry.role === "assistant" && entry.content.some((block) => block.type === "toolCall" && block.id === result.toolCallId));
       assert.equal(message.content.find((block) => block.type === "toolCall").arguments.code, code);
+    });
+    await t.test("fast parallel calls flush final UI records before hooks and transcript completion", async () => {
+      const code = 'return await Promise.all([tools.safe_slow({ms: 5}), tools.safe_slow({ms: 5})]);';
+      const result = await run(code);
+      assert.equal(result.content[0].text, '["slow","slow"]');
+      assert.equal(result.nestedCalls.complete, true);
+      assert.ok(result.nestedCalls.calls.every((call) => call.status === "ok"));
+      assert.deepEqual(result.details.calls.map((call) => JSON.parse(call.args)), [{ ms: 5 }, { ms: 5 }]);
+      const updates = callUpdates.filter((update) => update.id === result.toolCallId);
+      assert.ok(updates.at(-1).calls.every((call) => call.status === "ok"));
+      const count = updates.length;
+      await delay(40);
+      assert.equal(callUpdates.filter((update) => update.id === result.toolCallId).length, count, "no UI notification after final result");
     });
     await t.test("warnings and truncation reach the actual transcript", async () => {
       const warning = await run('Promise.reject(new Error("denied")); return "done";');

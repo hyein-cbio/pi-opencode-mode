@@ -206,10 +206,13 @@ export function createOpenCodeModeExtension({ parseSource } = {}) {
           decision: "selected", route: preflight.supported ? TOOL_NAME : "codemode",
           reasons: preflight.reasons, executesSource: false,
         });
-        const finish = (result) => ({
-          ...result,
-          details: { ...result.details, calls: calls.snapshot(), preflight, route, durationMs: performance.now() - startedAt },
-        });
+        const finish = (result) => {
+          calls.close();
+          return {
+            ...result,
+            details: { ...result.details, calls: calls.snapshot(), preflight, route, durationMs: performance.now() - startedAt },
+          };
+        };
         if (!preflight.supported) {
           // Built-in codemode is model-only: do not bypass Pi's invocation boundary.
           return finish(renderResult({
@@ -229,6 +232,9 @@ export function createOpenCodeModeExtension({ parseSource } = {}) {
             error: { kind: "ExecutionFailure", message: signal?.aborted ? "Script interrupted" : message(error) },
             toolCalls: [],
           }));
+        } finally {
+          // Also dispose presentation timers if result formatting itself throws.
+          calls.close();
         }
       },
     });

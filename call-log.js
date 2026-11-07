@@ -33,10 +33,17 @@ function previewArgs(input) {
   catch { return "[argument preview unavailable]"; }
 }
 
+// Coalesce presentation only, independently of Pi's terminal paint scheduler.
+export const CALL_UPDATE_INTERVAL_MS = 16;
+
 export function createCallLog(onUpdate, maxCalls) {
   const records = [];
+  let timer;
+  let dirty = false;
+  let closed = false;
+  let initial = true;
   const snapshot = () => records.map((record) => ({ ...record }));
-  const publish = () => {
+  const emit = () => {
     // UI observers are best-effort, not part of host permissions or results.
     // A broken observer must not change execution or leave an unhandled rejection.
     try {
@@ -44,8 +51,37 @@ export function createCallLog(onUpdate, maxCalls) {
       pending?.catch?.(() => {});
     } catch { /* keep tool behavior independent of presentation */ }
   };
+  const publish = () => {
+    if (closed || typeof onUpdate !== "function") return;
+    if (initial) {
+      initial = false;
+      emit();
+      return;
+    }
+    dirty = true;
+    if (timer === undefined) {
+      timer = setTimeout(() => {
+        timer = undefined;
+        if (closed || !dirty) return;
+        dirty = false;
+        emit();
+      }, CALL_UPDATE_INTERVAL_MS);
+    }
+  };
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    if (timer !== undefined) clearTimeout(timer);
+    timer = undefined;
+    // Flush now, never wait another frame to deliver the root's final result.
+    // Close first so a reentrant observer cannot leave another timer behind.
+    if (dirty) {
+      dirty = false;
+      emit();
+    }
+  };
   return {
-    snapshot, publish,
+    snapshot, publish, close,
     async run(name, input, signal, invoke) {
       const record = records.length < maxCalls ? {
         name: clip(name, 128), args: previewArgs(input), status: "running",
