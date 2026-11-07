@@ -25,6 +25,13 @@ function ctxWith(tools) {
 
 test("package is one OpenCode-backed pi extension", () => {
   const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  const lock = JSON.parse(readFileSync(new URL("../package-lock.json", import.meta.url), "utf8"));
+  const changelog = readFileSync(new URL("../CHANGELOG.md", import.meta.url), "utf8");
+  assert.equal(lock.name, pkg.name);
+  assert.equal(lock.version, pkg.version);
+  assert.equal(lock.packages[""].version, pkg.version);
+  assert.deepEqual(lock.packages[""].dependencies, pkg.dependencies);
+  assert.ok(changelog.includes(`## ${pkg.version} —`), "document the prepared package version");
   assert.deepEqual(pkg.pi.extensions, ["./index.js"]);
   assert.deepEqual(Object.keys(pkg.dependencies).sort(), ["@opencode/codemode", "acorn", "effect"]);
   assert.equal(pkg.dependencies["@opencode/codemode"], "2.2.6");

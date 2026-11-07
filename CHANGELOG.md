@@ -1,29 +1,118 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — Unreleased
 
-### Changed
+Prepared on **2026-11-07**. This entry describes the 0.2.0 source/package
+preparation; the npm package, Git tag and GitHub release have not been published
+as part of this work.
 
-- Use `@opencode/codemode` 2.2.6. Acorn stays 8.15.0. Effect moves from 4.0.6
-  to 4.1.0 to match the published exact dependency, so the extension and
-  CodeMode load one Effect instance. The default engine remains the legacy
-  interpreter; the experimental bytecode VM is not enabled. `require` can load
-  built-in globals (`url`, `util`, `crypto`), and dynamic `import()` runs if it
-  reaches the interpreter, so preflight rejects both before runtime
-  construction or host effects. `for...in` behavior is unchanged and stays
-  rejected. The tool bridge, limits, and result contract are unchanged.
+### Dependency support and execution safety
 
-- Use `@opencode/codemode` 2.2.5. Acorn stays 8.15.0. Effect moves from 4.0.1
-  to 4.0.6 to match the published dependency. The 2.2.5 interpreter visits
-  inherited enumerable keys in `for...in` and still visits keys deleted during
-  iteration, so preflight still rejects that syntax before execution. This
-  dependency update did not require a change to the tool bridge, limits,
-  preflight, or result contract.
+- Upgrade the exact runtime pins to **`@opencode/codemode` 2.2.6** and
+  **Effect 4.1.0**, with **Acorn 8.15.0** unchanged. This includes the previously
+  unreleased 2.2.1/2.2.5 compatibility work; the final supported pin is 2.2.6.
+  The extension and CodeMode resolve the same Effect module, preserving the
+  shared interruption/cleanup behavior of the bridge.
+- Retain PR #6's dependency and compatibility changes. The default engine is
+  still the legacy interpreter: the experimental bytecode VM, suspend/resume
+  and snapshot APIs are **not enabled** by this release.
+- Reject `require` before backend loading, runtime construction or host effects.
+  CodeMode 2.2.6 now binds this name and can load `url`, `util` and `crypto`;
+  preflight conservatively rejects references and shadowed bindings, including
+  references after a would-be host call. A noncomputed property named `require`
+  remains ordinary data and is not rejected for its name alone.
+- Keep dynamic `import()` outside the syntax allowlist even though the new
+  interpreter can execute it. Static imports remain script-mode syntax errors.
+  Keep `for...in` rejected because inherited keys and keys deleted during
+  iteration do not match the supported JavaScript behavior.
+- Preserve model-only invocation, the fresh runtime and callable catalog for
+  every execution, Pi validation/permissions/result hooks and nested-call audit,
+  the 64-call budget, bounded diagnostics/output, and awaited host cleanup.
+  No automatic fallback, retry or replay is introduced.
 
-- Use `@opencode/codemode` 2.2.1. Acorn stays 8.15.0 and Effect stays 4.0.1.
-  The published package contents differ from 2.2.0, including a new interpreter
-  runner module. This dependency update did not require a change to the tool
-  bridge, limits, preflight, or result contract; `for...in` remains rejected.
+### Rendering and responsiveness
+
+- Cache source highlighting and output components **per tool row** instead of
+  rebuilding unchanged text on every nested-call update. Expensive highlighting
+  is deferred until an actual render. Stable output children retain TUI Text's
+  width-aware wrapping cache when only timers or call records change.
+- Invalidate embedded ANSI/highlight strings when the component/theme changes,
+  including palette changes behind a stable theme Proxy. Source replacement,
+  expansion/collapse, resize, partial/final transitions and hook-replaced output
+  still update correctly. Cache entries retain only the current children, not
+  an unbounded history of sources or outputs.
+- Coalesce presentation notifications on a **16ms timer**, independently of Pi's
+  terminal paint scheduler. Host dispatch and record/status mutation remain
+  immediate. Completion flushes pending state synchronously and removes the
+  timer on success, error and cancellation; no notification is scheduled after
+  the root result. Detached snapshots and observer-error isolation are retained.
+- Show a raw, unformatted/unhighlighted preview while arguments stream; restore
+  structural formatting and syntax highlighting when arguments are complete or
+  execution starts. Older hosts without `argsComplete` retain completed-source
+  behavior.
+- Limit oversized collapsed source previews to **8,192 UTF-8 bytes**, cut safely
+  at Unicode boundaries, and show a visible notice. Expansion exposes the full
+  unhighlighted original. Display formatting and limits never rewrite executed
+  or stored source, change diagnostic offsets, or alter model-visible output.
+
+### Lazy backend loading
+
+- Load CodeMode and Effect on the first preflight-approved execution instead of
+  extension registration. Rejected programs do not load the backend.
+- Concurrent executions share only the module-load promise, never a runtime,
+  context, signal, callable-tool wrapper or call log. A caller can stop waiting
+  on cancellation without cancelling another waiter; late import failures stay
+  observed and cancelled callers cannot dispatch host tools after loading.
+- This shifts one-time backend startup cost to first use. It does not eliminate
+  that cost or claim a steady-state execution improvement by itself.
+
+### Intentional visible changes and upgrade notes
+
+- Very short host calls may finish between visual frames, so an intermediate
+  `running` state need not appear. Final records retain every attempted call
+  within the existing budget, including duplicate names, handled failures,
+  cancellation and cleanup-aware durations.
+- Streaming source is temporarily shown without highlighting/structural layout.
+  Oversized source uses a limited raw preview until expanded. The original
+  source and authoritative result text remain available and unchanged.
+- After updating a source checkout, run `npm ci` to install the new exact pins,
+  then reload/restart Pi. Do not use a stale 2.2.0/Effect 4.0.1 tree to validate
+  2.2.6 support. Published-version installation commands must only be advanced
+  after the corresponding npm package/tag actually exists.
+
+### Verification and measured scope
+
+- The combined PR #6 + performance implementation passed **115 tests**, with
+  no failures or skips, on Node **22.23.1** / macOS using Pi/TUI **1.3.0** and
+  **1.5.0**. The clean-copy matrix also passed Pi/TUI **0.99.0 / 1.3.0 / 1.4.0**
+  with actual CodeMode **2.2.6** / Effect **4.1.0** and no skipped SDK coverage.
+- Regression coverage includes deterministic formatting/highlight work counts,
+  stable child reuse, cache invalidation/eviction, Unicode and raw-source
+  preservation, timer coalescing/final flush, no late updates, concurrent-root
+  isolation, observer failures, lazy import cancellation/failure, actual Pi
+  file/jiti loading, and existing permission/output/timeout/cleanup contracts.
+- A warm synthetic comparison on Node **26.13.0**, with actual Pi **1.5.0** tool
+  components, 300 catalog tools and 64 immediate in-memory hosts, measured
+  **105.6ms -> 3.8ms median** and **108.6ms -> 4.4ms p95** for PR #6 alone versus
+  PR #6 plus these local changes. Notifications fell from **129 to 2**. Both
+  sides used 2.2.6/Effect 4.1.0; samples included component setup, execution and
+  final rendering, with partial component updates applied but terminal-line
+  painting deferred to the end (36 samples/variant, six warmups, width120).
+- These measurements are **not whole-app speedup ratios**, model/provider or
+  physical-terminal E2E timings, confidence intervals, or proof that seconds of
+  perceived delay are eliminated. The upstream search-index optimization is
+  **not included**. See [TESTING.md](TESTING.md) for detailed evidence.
+
+### Known limits and pending release checks
+
+- The interpreter is not an OS or memory-isolation sandbox. Host cancellation
+  remains cooperative; a non-settling host may delay delivery beyond the
+  nominal 30-second interruption deadline. Completed effects cannot be undone.
+- MCP readiness coordination, broad JavaScript support and live model behavior
+  are unchanged; choose native codemode upfront where documented.
+- Hosted Node **22.19.0 / 24.x** CI and a configured-model/TUI walkthrough remain
+  release checks. No live-provider test, npm publication or tag creation is
+  implied by the local results above.
 
 ## 0.1.5 — 2026-10-28
 
