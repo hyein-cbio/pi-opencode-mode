@@ -20,7 +20,9 @@ When updating the matrix, keep `test/pi-versions.test.js` and
 The default `npm ci` tree now locks matching **Pi/TUI 1.5.0**. This is separate
 from the intentional **0.99.0 / 1.3.0 / 1.4.0** compatibility matrix; neither
 its versions nor the public **>= 0.99.0, < 2.0.0** peer range is narrowed.
-CodeMode **2.2.6**, Effect **4.1.0** and Acorn **8.15.0** remain unchanged.
+The current runtime pin is CodeMode **2.2.7**. Effect **4.1.0** and Acorn
+**8.15.0** stay exact. The default Pi/TUI **1.5.0** lockfile and the public
+peer range are unchanged by that bump.
 
 For the default environment, check the **full** dependency tree, including peers:
 
@@ -51,7 +53,7 @@ npm test
 ```
 
 After dependencies are installed, the tests do not install SDKs or use model
-APIs. The release pin under test is `@opencode/codemode` **2.2.6** with Effect
+APIs. The release pin under test is `@opencode/codemode` **2.2.7** with Effect
 **4.1.0**. Without
 `PI_OPENCODE_SDK`, the `isolated real Pi SDK session` suite explicitly skips.
 The boundary tests include literal 30-second
@@ -65,8 +67,8 @@ To use the SDK installed by `npm ci`:
 PI_OPENCODE_SDK="$PWD/node_modules/@earendil-works/pi-coding-agent" npm test
 ```
 
-Expected result: **115 passed, 0 skipped**, including the SDK suite's parent and
-eleven subtests. To run only the session suite:
+Expected result: **116 passed, 0 skipped**, including the SDK suite's parent and
+eleven subtests, plus the legacy idempotency-key regression. To run only the session suite:
 
 ```sh
 PI_OPENCODE_SDK="$PWD/node_modules/@earendil-works/pi-coding-agent" node --test test/session.test.js
@@ -98,7 +100,7 @@ This opt-in command installs from npm. For each supported baseline it:
 
 It does not alter the source checkout's dependencies or personal Pi settings.
 The release pin this command installs and verifies is `@opencode/codemode`
-**2.2.6** with Effect **4.1.0**. The following counts describe PR #6's
+**2.2.7** with Effect **4.1.0**. The following counts describe PR #6's
 independent dependency-only baseline, before the local presentation/loading
 changes. On Node **v22.23.4** (Linux x64), `npm test`
 passed **83** tests, failed **0**, and skipped **1** (`isolated real Pi SDK
@@ -537,6 +539,38 @@ those old fixtures after the override would test a different security baseline
 and is deliberately not part of the default audit gate. Existing Python CI
 regressions passed **13 tests**; package dry-run retained the 11-file scope.
 No hosted matrix was dispatched for this uncommitted maintenance change.
+
+## CodeMode 2.2.7 verification — 2026-11-10
+
+Local only, on Linux 6.12.113+ x86_64. Starting main was
+`7bf2f4c7ff4102a86edef55b56b39504b1dfd21b`, which pinned CodeMode **2.2.6**,
+Effect **4.1.0**, and Acorn **8.15.0**. The candidate keeps Effect and Acorn
+and pins CodeMode **2.2.7**. `npm view @opencode/codemode dist-tags.latest`
+returned `2.2.7` at 2026-11-10T15:01:02Z. No open pull request existed for that
+version. Hosted Modal CI has not run on this candidate. macOS was not
+exercised. No live model API and no new benchmark.
+
+Published artifact comparison, not the monorepo release notes, is the baseline.
+2.2.7 still depends on exact Effect **4.1.0** and Acorn **8.15.0**. The default
+runtime is still `catalog` plus `execute`. New idempotent/durable tool wrappers,
+VM `runId` options, and extension snapshot hooks are not used. `for...in` and
+`require` behavior matches 2.2.6. The legacy engine now passes each plain
+`execute` a `<runId>:<callId>` key. The extension ignores that argument, so Pi
+still receives only the decoded input and call metadata does not store the key.
+
+On Node **v22.23.4**, a fresh `npm ci --ignore-scripts` exited 0 and installed
+CodeMode 2.2.7, Effect 4.1.0, Acorn 8.15.0, and Pi/TUI 1.5.0, with one shared
+Effect module path. `npm test` without `PI_OPENCODE_SDK` exited 0: tests 105,
+pass 104, fail 0, skipped 1 (`isolated real Pi SDK session`). With
+`PI_OPENCODE_SDK` pointed at that install, `npm test` exited 0: tests 116,
+pass 116, fail 0, skipped 0, Actual SDK 1.5.0. `npm pack --dry-run` lists 11
+files and `git diff --check` is clean.
+
+`npm run test:pi-versions` exited 0 on Node **v22.19.0**, **v22.23.4**, and
+**v24.22.1**. Each parent run was tests 3, pass 3, fail 0, skipped 0. Every
+cell used CodeMode 2.2.7 and matching Pi/TUI **0.99.0**, **1.3.0**, and
+**1.4.0**. Each inner suite was tests 116, pass 116, fail 0, skipped 0.
+`PI_OPENCODE_UPSTREAM_VERSION` and `PI_OPENCODE_TEST_VERSION` were unset.
 
 ## Additional release checks
 

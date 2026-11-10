@@ -82,6 +82,11 @@ for (const version of versions) {
       assert.equal(result.code, 0, result.output);
       assert.ok(result.output.includes(`Actual SDK ${version};`), "the real-session suite must run");
       assert.match(result.output, /\bskipped 0\b/u, "compatibility runs must not skip SDK coverage");
+      // Node 22 prints TAP `#` comments. Node 24's default reporter uses `ℹ`.
+      const summaries = [...result.output.matchAll(/^\s*\S+\s+tests (\d+)\r?\n\s*\S+\s+suites \d+\r?\n\s*\S+\s+pass (\d+)\r?\n\s*\S+\s+fail (\d+)\r?\n\s*\S+\s+cancelled \d+\r?\n\s*\S+\s+skipped (\d+)/gm)];
+      const inner = summaries.at(-1);
+      assert.ok(inner, `inner suite must report its own pass/fail/skip counts\n${result.output.slice(-2000)}`);
+      t.diagnostic(`Inner suite tests ${inner[1]}, pass ${inner[2]}, fail ${inner[3]}, skipped ${inner[4]}`);
       t.diagnostic(`Node ${process.version}; Pi ${version}; CodeMode ${installedCodeMode.version}; full suite passed with no skips`);
     } finally {
       await rm(dir, { recursive: true, force: true });

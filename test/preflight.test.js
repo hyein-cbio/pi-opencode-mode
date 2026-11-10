@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CodeMode } from "@opencode/codemode";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+import { CodeMode, Tool } from "@opencode/codemode";
 import { Effect } from "effect";
 import { checkOpenCodeCompatibility } from "../route.js";
 import { createOpenCodeModeExtension } from "../index.js";
@@ -209,7 +212,7 @@ test("require and dynamic import stay rejected before host effects", async () =>
     assert.deepEqual(result.details.calls, [], source);
     assert.equal(params.code, source);
   }
-  // Property names are data. The identifier require is what 2.2.6 binds.
+  // Property names are data. The identifier require is what 2.2.7 still binds.
   const property = await registeredTool().execute("require-property", {
     code: "return ({ require: 1 }).require;",
   }, undefined, undefined, { tools: [] });
@@ -224,6 +227,92 @@ test("require and dynamic import stay rejected before host effects", async () =>
   assert.deepEqual(await installedCodeModeValue('const m = require("util"); return Object.keys(m);'), ["TextEncoder", "TextDecoder"]);
   assert.equal(await installedCodeModeValue('return typeof require("crypto");'), "object");
   assert.equal(await installedCodeModeValue('return typeof import("url");'), "object");
+});
+
+test("legacy host calls receive an idempotency key without changing input or call accounting", async () => {
+  const require = createRequire(import.meta.url);
+  const codemodeEntry = import.meta.resolve("@opencode/codemode");
+  const effectFromExtension = require.resolve("effect");
+  const effectFromCodeMode = createRequire(fileURLToPath(codemodeEntry)).resolve("effect");
+  assert.equal(effectFromCodeMode, effectFromExtension);
+  const installed = JSON.parse(readFileSync(new URL("../package.json", codemodeEntry), "utf8"));
+  assert.equal(installed.version, "2.2.7");
+  assert.equal(installed.dependencies.effect, "4.1.0");
+  assert.equal(installed.dependencies.acorn, "8.15.0");
+
+  const seen = [];
+  const host = Tool.make({
+    description: "host",
+    input: { type: "object" },
+    output: { description: "JSON value" },
+    execute: (input, context) => {
+      seen.push({ input, key: context?.key });
+      return Effect.succeed({ n: input.n });
+    },
+  });
+  assert.equal(host._tag, "CodeModeTool");
+  assert.equal(host.mode, undefined, "a plain execute function is not idempotent or durable");
+  const runtime = CodeMode.make({
+    tools: { host },
+    limits: { timeoutMs: 5_000, maxToolCalls: 4, maxOutputBytes: 4_096 },
+  });
+  assert.deepEqual(Object.keys(runtime).sort(), ["catalog", "execute"]);
+  const result = await Effect.runPromise(runtime.execute(
+    "const a = await tools.host({ n: 1 }); const b = await tools.host({ n: 2 }); return [a, b];",
+  ));
+  assert.equal(result.ok, true, JSON.stringify(result.error));
+  assert.deepEqual(result.value, [{ n: 1 }, { n: 2 }]);
+  assert.deepEqual(result.toolCalls, [{ name: "host" }, { name: "host" }]);
+  assert.deepEqual(seen.map((call) => call.input), [{ n: 1 }, { n: 2 }]);
+  assert.equal(seen.length, 2);
+  const runIds = seen.map((call) => {
+    assert.match(call.key, /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}:\d+$/iu);
+    return call.key.slice(0, call.key.lastIndexOf(":"));
+  });
+  assert.equal(runIds[0], runIds[1], "one run shares a run id");
+  assert.deepEqual(seen.map((call) => call.key.slice(call.key.lastIndexOf(":") + 1)), ["0", "1"]);
+
+  const limited = await Effect.runPromise(CodeMode.make({
+    tools: {
+      host: Tool.make({
+        description: "host",
+        input: { type: "object" },
+        output: { description: "JSON value" },
+        execute: (input) => Effect.succeed(input.n),
+      }),
+    },
+    limits: { timeoutMs: 5_000, maxToolCalls: 1, maxOutputBytes: 4_096 },
+  }).execute("await tools.host({ n: 1 }); return await tools.host({ n: 2 });"));
+  assert.equal(limited.ok, false);
+  assert.equal(limited.error.kind, "ToolCallLimitExceeded");
+  assert.match(limited.error.message, /tool-call limit of 1/);
+  assert.deepEqual(limited.toolCalls, [{ name: "host" }]);
+
+  const hostCalls = [];
+  const extension = await registeredTool().execute("key", {
+    code: 'return await tools.host({ id: "order_42" });',
+  }, undefined, undefined, {
+    tools: [{
+      name: "host",
+      parameters: { type: "object" },
+      async run(args) {
+        hostCalls.push(args);
+        return { isError: false, result: { content: [{ type: "text", text: "" }], structuredContent: args } };
+      },
+    }],
+    async executeTool(name, args) {
+      const tool = this.tools.find((entry) => entry.name === name);
+      return tool.run(args);
+    },
+  });
+  assert.equal(extension.details.ok, true, extension.content?.[0]?.text);
+  assert.deepEqual(hostCalls, [{ id: "order_42" }]);
+  assert.deepEqual(extension.details.toolCalls, [{ name: "host" }]);
+  assert.equal(extension.details.calls.length, 1);
+  assert.deepEqual(Object.keys(extension.details.calls[0]).sort(), ["args", "durationMs", "name", "status"]);
+  assert.equal(extension.details.calls[0].name, "host");
+  assert.equal(extension.details.calls[0].status, "ok");
+  assert.equal(extension.details.calls[0].args, '{"id":"order_42"}');
 });
 
 test("regex literal methods and flags execute in the installed OpenCode runtime", async () => {
