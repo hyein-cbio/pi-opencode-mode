@@ -236,9 +236,16 @@ test("legacy host calls receive an idempotency key without changing input or cal
   const effectFromCodeMode = createRequire(fileURLToPath(codemodeEntry)).resolve("effect");
   assert.equal(effectFromCodeMode, effectFromExtension);
   const installed = JSON.parse(readFileSync(new URL("../package.json", codemodeEntry), "utf8"));
-  assert.equal(installed.version, "2.2.7");
-  assert.equal(installed.dependencies.effect, "4.1.0");
-  assert.equal(installed.dependencies.acorn, "8.15.0");
+  const pins = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).dependencies;
+  // The latest-upstream matrix installs PI_OPENCODE_UPSTREAM_VERSION over the release pin.
+  const upstream = process.env.PI_OPENCODE_UPSTREAM_VERSION;
+  assert.equal(installed.version, upstream || pins["@opencode/codemode"]);
+  if (upstream === undefined) {
+    // Release pin: CodeMode's exact dependencies must match this package's pins.
+    assert.equal(installed.dependencies.effect, pins.effect);
+    assert.equal(installed.dependencies.acorn, pins.acorn);
+  }
+  // Under any CodeMode version, the shared Effect module path asserted above is the real invariant.
 
   const seen = [];
   const host = Tool.make({
