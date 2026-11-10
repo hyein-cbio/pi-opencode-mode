@@ -64,6 +64,12 @@ into your project.
 
 Requires **Node.js >= 22.19.0**, npm, Git, and **Pi >= 0.99.0, < 2.0.0** with a configured model/provider. Check `node --version` and `pi --version`; if you are new to Pi, see its [quickstart](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/quickstart.md). In Pi, `/login` configures a provider and `/model` chooses a model. The extension does not need an OpenCode account or server; asking Pi to call it still uses your configured model.
 
+**Host security:** use an up-to-date, matching Pi/TUI pair within the supported
+range; the default development/test lockfile uses **1.5.0**. The older versions
+in the compatibility matrix are not security recommendations. Peer dependencies
+are not bundled in this extension, but an existing vulnerable Pi installation
+can still affect you. Update Pi independently of this extension.
+
 1. **Install from source for the walkthrough.** Use the **v0.2.0** release tag
    so the examples and dependency pins match this version.
 
@@ -353,7 +359,17 @@ PI_OPENCODE_SDK=/path/to/node_modules/@earendil-works/pi-coding-agent npm test
 
 Real-session tests use disposable directories, in-memory history/settings, scripted assistant streams, disabled model-network discovery, and safe in-memory stubs only. No personal resources, real model calls, or real mutation tools are used.
 
-`npm run test:pi-versions` is a separate, **network/install-enabled** compatibility matrix. It installs dependencies into disposable copies and runs the full suite, including real-SDK sessions, against Pi 0.99.0, 1.3.0, and 1.4.0. See [TESTING.md](TESTING.md) for reproduction commands and coverage limits.
+The default development/test lockfile selects **Pi/TUI 1.5.0**, while the public
+peer compatibility range stays **>= 0.99.0, < 2.0.0**. After `npm ci`, use
+`npm audit` to check the entire default tree, including host peers; omitting
+peers alone does not establish that an installed Pi host is safe.
+
+`npm run test:pi-versions` is a separate, **network/install-enabled** compatibility
+matrix. Each disposable copy first installs and audits the default lockfile
+(failing on moderate/high findings), then installs the exact older Pi/TUI pair
+without saving it and runs the full suite, including real-SDK sessions, against
+**0.99.0, 1.3.0, and 1.4.0**. It does not audit-fix those intentional legacy
+fixtures. See [TESTING.md](TESTING.md) for reproduction commands and coverage limits.
 
 ## Project information
 

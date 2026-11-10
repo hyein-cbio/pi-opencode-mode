@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Development baseline and host security
+
+- Refresh the default development/test lockfile from Pi/TUI **1.3.0** to
+  **1.5.0**, including the host's fixed `minimatch` and `undici` dependencies.
+  Keep CodeMode **2.2.6**, Effect **4.1.0**, Acorn **8.15.0**, package version
+  and the public **>= 0.99.0, < 2.0.0** peer compatibility range unchanged.
+- Check the complete default lockfile tree (including peers) for moderate/high
+  audit findings before each isolated legacy-SDK override. Retain the existing
+  **0.99.0 / 1.3.0 / 1.4.0** compatibility matrix without audit-fixing its
+  deliberately old fixtures or changing the source manifest/lockfile.
+- Add default-host lockfile and peer-range regression assertions. Distinguish
+  compatibility testing from security guidance: recommend an up-to-date host,
+  and clarify that unbundled peers can still expose a real older Pi installation.
+
 ## 0.2.0 — 2026-11-07
 
 CodeMode **2.2.6** support and local rendering/loading performance improvements,

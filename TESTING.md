@@ -15,6 +15,34 @@ range or a claim that every intermediate release has been individually tested.
 When updating the matrix, keep `test/pi-versions.test.js` and
 `ci/modal_ci.py` in sync; both workflows use the shared Modal matrix.
 
+## Default development baseline and host security
+
+The default `npm ci` tree now locks matching **Pi/TUI 1.5.0**. This is separate
+from the intentional **0.99.0 / 1.3.0 / 1.4.0** compatibility matrix; neither
+its versions nor the public **>= 0.99.0, < 2.0.0** peer range is narrowed.
+CodeMode **2.2.6**, Effect **4.1.0** and Acorn **8.15.0** remain unchanged.
+
+For the default environment, check the **full** dependency tree, including peers:
+
+```sh
+npm ci
+npm audit --audit-level=moderate
+PI_OPENCODE_SDK="$PWD/node_modules/@earendil-works/pi-coding-agent" npm test
+```
+
+The matrix harness runs this audit gate immediately after its clean default
+install and before replacing Pi/TUI with an older pair. Moderate/high findings
+fail that default-baseline check. It does not audit or automatically fix the
+intentionally old compatibility tree after the override. No `audit fix`,
+transitive dependency override or minimum-peer increase is used to hide alerts.
+The same existing six hosted compatibility cells are retained.
+
+An unbundled peer is not necessarily harmless: users running a vulnerable host
+can still be affected. Recommend an up-to-date matching Pi/TUI pair within the
+supported range. Functional compatibility with older SDKs is not a security
+recommendation or a promise that those host dependencies are patched. Dated
+1.3.0 audit/release records below describe historical states, not the new default.
+
 ## Local unit and boundary tests
 
 ```sh
@@ -58,11 +86,15 @@ npm run test:pi-versions
 This opt-in command installs from npm. For each supported baseline it:
 
 1. Copies only package files, the lockfile, and tests into a unique temp directory.
-2. Runs `npm ci --ignore-scripts`, then installs the exact matching Pi/TUI version
-   without saving it or changing the lockfile.
-3. Verifies the installed versions and runs `npm test` with `PI_OPENCODE_SDK` set,
+2. Runs `npm ci --ignore-scripts` and verifies the default installed Pi/TUI
+   versions match the lockfile (**1.5.0**).
+3. Runs `npm audit --audit-level=moderate` on that default tree, **including
+   peers**, before any legacy override.
+4. Installs the exact older matching Pi/TUI version without saving it or changing
+   the manifest/lockfile; it does not audit-fix this compatibility fixture.
+5. Verifies the selected versions and runs `npm test` with `PI_OPENCODE_SDK` set,
    so the full real-session suite runs instead of skipping.
-4. Removes the temp directory in `finally`, even on failure.
+6. Removes the temp directory in `finally`, even on failure.
 
 It does not alter the source checkout's dependencies or personal Pi settings.
 The release pin this command installs and verifies is `@opencode/codemode`
@@ -481,6 +513,30 @@ independently of the extension.
 A configured-model/physical-TUI walkthrough was not performed. The release
 retains the documented cooperative-cancellation, memory/isolation and
 MCP-readiness limits; passing CI is not a live-provider E2E guarantee.
+
+## Default-host lockfile refresh verification — 2026-11-07
+
+After the 0.2.0 release, the development lockfile was refreshed to matching
+**Pi/TUI 1.5.0**, with **minimatch 11.0.3** and **undici 8.12.3**. The package
+version, public peer range, and complete CodeMode/Effect/Acorn lock entries are
+unchanged. The 0.2.0 release-time 1.3.0 audit findings above remain historical;
+the refreshed default is a distinct source-checkout maintenance change.
+
+A fresh isolated `npm ci --ignore-scripts` on Node **22.23.1** verified the
+restored broad peer contract and passed the full **115-test** suite with no
+failures or skips. Full `npm audit` and `npm audit --omit=peer` both reported
+**0** known vulnerabilities. These are registry-advisory snapshots, not security
+certification. The checkout's pre-existing `node_modules` was not reinstalled;
+run `npm ci` to apply the new lockfile to an existing development installation.
+
+The unchanged three-version compatibility matrix also passed all cells, with
+no skipped SDK coverage. Each cell first verified and audited the default
+**1.5.0** installation, then installed its older **0.99.0 / 1.3.0 / 1.4.0** pair
+and ran the full suite without changing the copied manifest/lockfile. Auditing
+those old fixtures after the override would test a different security baseline
+and is deliberately not part of the default audit gate. Existing Python CI
+regressions passed **13 tests**; package dry-run retained the 11-file scope.
+No hosted matrix was dispatched for this uncommitted maintenance change.
 
 ## Additional release checks
 

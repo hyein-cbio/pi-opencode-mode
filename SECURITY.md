@@ -5,6 +5,19 @@
 Security fixes target the latest released version, currently **0.2.0**.
 See [CHANGELOG.md](CHANGELOG.md) for the changes and release history.
 
+## Host dependency security
+
+Use an up-to-date, matching Pi/TUI pair within the supported range. The default
+source-checkout development/test lockfile selects **1.5.0**; the **0.99.0 /
+1.3.0 / 1.4.0** matrix is retained only for compatibility testing. Passing an
+older SDK's functional tests is not an endorsement of its dependency security.
+
+Pi peers are not bundled in this extension's tarball, but a vulnerable Pi host
+can still affect an actual installation. Update the host independently; the
+broad peer range describes API compatibility, not a security-support promise
+for every older host. Audit the full default tree after `npm ci`, not only the
+non-peer subset. Audit results cover known advisories, not all security risks.
+
 ## Reporting a vulnerability
 
 Do **not** disclose vulnerabilities, credentials, or private tool results in a

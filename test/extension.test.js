@@ -31,7 +31,11 @@ test("package is one OpenCode-backed pi extension", () => {
   assert.equal(lock.version, pkg.version);
   assert.equal(lock.packages[""].version, pkg.version);
   assert.deepEqual(lock.packages[""].dependencies, pkg.dependencies);
-  assert.ok(changelog.includes(`## ${pkg.version} —`), "document the prepared package version");
+  for (const name of ["pi-coding-agent", "pi-tui"]) {
+    assert.equal(lock.packages[`node_modules/@earendil-works/${name}`].version, "1.5.0", "default test host stays current independently of legacy compatibility cases");
+    assert.equal(pkg.peerDependencies[`@earendil-works/${name}`], ">=0.99.0 <2.0.0", "default lockfile refresh must not narrow public compatibility");
+  }
+  assert.ok(changelog.includes(`## ${pkg.version} —`), "document the package version");
   assert.deepEqual(pkg.pi.extensions, ["./index.js"]);
   assert.deepEqual(Object.keys(pkg.dependencies).sort(), ["@opencode/codemode", "acorn", "effect"]);
   assert.equal(pkg.dependencies["@opencode/codemode"], "2.2.6");

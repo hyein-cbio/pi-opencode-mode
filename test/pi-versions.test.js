@@ -46,6 +46,7 @@ for (const version of versions) {
       await Promise.all([...paths].map((path) => cp(join(root, path), join(dir, path), { recursive: true })));
       const manifestBefore = await readFile(join(dir, "package.json"), "utf8");
       const lockBefore = await readFile(join(dir, "package-lock.json"), "utf8");
+      const defaultLock = JSON.parse(lockBefore);
       for (const args of [
         ["ci", "--ignore-scripts", "--no-audit", "--no-fund"],
         ["install", "--ignore-scripts", "--no-audit", "--no-fund", "--no-save", "--package-lock=false",
@@ -54,6 +55,18 @@ for (const version of versions) {
       ]) {
         const result = await run(args, dir);
         assert.equal(result.code, 0, result.output);
+        if (args[0] === "ci") {
+          for (const name of ["pi-coding-agent", "pi-tui"]) {
+            const key = `node_modules/@earendil-works/${name}`;
+            const installed = JSON.parse(await readFile(join(dir, key, "package.json"), "utf8"));
+            assert.equal(installed.version, defaultLock.packages[key].version, "audit the default lockfile host before installing a legacy SDK");
+          }
+          // Security gate for the default development tree, including peers.
+          // Do not audit-fix or audit the intentionally old compatibility tree.
+          const audit = await run(["audit", "--audit-level=moderate"], dir);
+          assert.equal(audit.code, 0, audit.output);
+          t.diagnostic(`Default Pi/TUI ${defaultLock.packages["node_modules/@earendil-works/pi-coding-agent"].version}: moderate/high audit passed before compatibility override`);
+        }
       }
       assert.equal(await readFile(join(dir, "package.json"), "utf8"), manifestBefore, "keep release manifest unchanged");
       assert.equal(await readFile(join(dir, "package-lock.json"), "utf8"), lockBefore, "keep release lockfile unchanged");
