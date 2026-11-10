@@ -38,7 +38,7 @@ test("package is one OpenCode-backed pi extension", () => {
   assert.ok(changelog.includes(`## ${pkg.version} —`), "document the package version");
   assert.deepEqual(pkg.pi.extensions, ["./index.js"]);
   assert.deepEqual(Object.keys(pkg.dependencies).sort(), ["@opencode/codemode", "acorn", "effect"]);
-  assert.equal(pkg.dependencies["@opencode/codemode"], "2.2.6");
+  assert.equal(pkg.dependencies["@opencode/codemode"], "2.2.7");
   assert.equal(pkg.dependencies.effect, "4.1.0");
   assert.equal(pkg.dependencies.acorn, "8.15.0");
 });

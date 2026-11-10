@@ -6,8 +6,9 @@
 
 - Refresh the default development/test lockfile from Pi/TUI **1.3.0** to
   **1.5.0**, including the host's fixed `minimatch` and `undici` dependencies.
-  Keep CodeMode **2.2.6**, Effect **4.1.0**, Acorn **8.15.0**, package version
-  and the public **>= 0.99.0, < 2.0.0** peer compatibility range unchanged.
+  That refresh did not itself change CodeMode (then **2.2.6**), Effect
+  **4.1.0**, Acorn **8.15.0**, package version, or the public
+  **>= 0.99.0, < 2.0.0** peer compatibility range.
 - Check the complete default lockfile tree (including peers) for moderate/high
   audit findings before each isolated legacy-SDK override. Retain the existing
   **0.99.0 / 1.3.0 / 1.4.0** compatibility matrix without audit-fixing its
@@ -15,6 +16,22 @@
 - Add default-host lockfile and peer-range regression assertions. Distinguish
   compatibility testing from security guidance: recommend an up-to-date host,
   and clarify that unbundled peers can still expose a real older Pi installation.
+
+### Dependency update
+
+- Bump the exact `@opencode/codemode` pin from **2.2.6** to **2.2.7**. Effect
+  stays the published exact dependency **4.1.0**, and Acorn stays **8.15.0**.
+  The extension and CodeMode still load one shared Effect module. The default
+  engine remains the legacy interpreter. This checkout does not enable
+  `engine: "vm"`, `Tool.idempotent`, `Tool.durable`, or extension snapshot hooks.
+- On the legacy engine, 2.2.7 passes `execute` a `<runId>:<callId>` idempotency
+  key and includes that key on CodeMode hook payloads. The bridge still forwards
+  only the decoded input to Pi, counts each admitted call once, and does not
+  store the key. `for...in` and `require` behavior is unchanged from 2.2.6 and
+  stays rejected before runtime construction or host effects.
+- Cover that legacy key contract with a real CodeMode/Effect regression. The
+  clean-copy harness now reports each inner suite's pass, fail, and skip counts
+  and accepts the Node 22 and Node 24 summary formats.
 
 ## 0.2.0 — 2026-11-07
 
