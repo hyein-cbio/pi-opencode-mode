@@ -212,7 +212,7 @@ test("require and dynamic import stay rejected before host effects", async () =>
     assert.deepEqual(result.details.calls, [], source);
     assert.equal(params.code, source);
   }
-  // Property names are data. The identifier require is what 2.2.7 still binds.
+  // Property names are data. The identifier require is what 2.3.0 still binds.
   const property = await registeredTool().execute("require-property", {
     code: "return ({ require: 1 }).require;",
   }, undefined, undefined, { tools: [] });
@@ -220,8 +220,8 @@ test("require and dynamic import stay rejected before host effects", async () =>
   assert.equal(JSON.parse(property.content[0].text), 1);
 
   const runtime = CodeMode.make({ limits: { timeoutMs: 5_000, maxToolCalls: 4, maxOutputBytes: 4_096 } });
-  assert.equal("program" in runtime, false);
-  assert.equal("resume" in runtime, false);
+  // 2.3.0 removed the legacy interpreter. make() is the bytecode runtime.
+  assert.deepEqual(Object.keys(runtime).sort(), ["catalog", "execute", "program", "resume"]);
   assert.deepEqual(await installedCodeModeValue('return typeof require;'), "function");
   assert.deepEqual(await installedCodeModeValue('const m = require("url"); return Object.keys(m);'), ["URL", "URLSearchParams"]);
   assert.deepEqual(await installedCodeModeValue('const m = require("util"); return Object.keys(m);'), ["TextEncoder", "TextDecoder"]);
@@ -229,7 +229,7 @@ test("require and dynamic import stay rejected before host effects", async () =>
   assert.equal(await installedCodeModeValue('return typeof import("url");'), "object");
 });
 
-test("legacy host calls receive an idempotency key without changing input or call accounting", async () => {
+test("host calls receive an idempotency key without changing input or call accounting", async () => {
   const require = createRequire(import.meta.url);
   const codemodeEntry = import.meta.resolve("@opencode/codemode");
   const effectFromExtension = require.resolve("effect");
@@ -258,12 +258,20 @@ test("legacy host calls receive an idempotency key without changing input or cal
     },
   });
   assert.equal(host._tag, "CodeModeTool");
-  assert.equal(host.mode, undefined, "a plain execute function is not idempotent or durable");
+  assert.equal(host.mode, undefined);
+  assert.equal("_tag" in host.execute, false, "a plain execute function is not idempotent or durable");
   const runtime = CodeMode.make({
     tools: { host },
     limits: { timeoutMs: 5_000, maxToolCalls: 4, maxOutputBytes: 4_096 },
   });
-  assert.deepEqual(Object.keys(runtime).sort(), ["catalog", "execute"]);
+  // The old legacy runtime exposed only catalog and execute. That shape is gone
+  // with the legacy engine. The bridge still calls execute and never suspends.
+  assert.deepEqual(Object.keys(runtime).sort(), ["catalog", "execute", "program", "resume"]);
+  const bridge = readFileSync(new URL("../index.js", import.meta.url), "utf8");
+  assert.match(bridge, /runtime\.execute\(/);
+  assert.doesNotMatch(bridge, /\.(?:program|resume|suspend)\s*\(/);
+  assert.doesNotMatch(bridge, /Tool\.(?:idempotent|durable)/);
+  assert.doesNotMatch(bridge, /\bengine\s*:/);
   const result = await Effect.runPromise(runtime.execute(
     "const a = await tools.host({ n: 1 }); const b = await tools.host({ n: 2 }); return [a, b];",
   ));
