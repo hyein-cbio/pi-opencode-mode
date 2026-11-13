@@ -8,9 +8,9 @@ export const ROUTE_LIMITS = PREFLIGHT_LIMITS;
 
 // Intentionally narrower than the interpreter. Unknown/new syntax is rejected;
 // this is a static compatibility check, not routing, semantic proof, or authorization.
-// Keep for...in out: CodeMode 2.2.7 still visits inherited enumerable keys and
-// still visits keys deleted during iteration, the same divergence as 2.2.6.
-// Keep require out: 2.2.7 still binds it and can load built-in globals (url, util, crypto).
+// Keep for...in out: CodeMode 2.3.0 still visits inherited enumerable keys and
+// still visits keys deleted during iteration, the same divergence as 2.2.7.
+// Keep require out: 2.3.0 still binds it and can load built-in globals (url, util, crypto).
 const SYNTAX = new Set([
   "Program", "ExpressionStatement", "EmptyStatement", "BlockStatement", "ReturnStatement",
   "VariableDeclaration", "VariableDeclarator", "IfStatement", "ForStatement", "ForOfStatement",

@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### Dependency update
+
+- Bump the exact `@opencode/codemode` pin from **2.2.7** to **2.3.0**. Effect
+  stays the published exact dependency **4.1.0**, and Acorn stays **8.15.0**.
+  The extension and CodeMode still load one shared Effect module.
+- 2.3.0 removes the legacy AST interpreter. `CodeMode.make` is the bytecode
+  runtime and also exposes `program` and `resume`. This extension still calls
+  only `runtime.execute`. It does not suspend or resume runs, and it does not
+  use `Tool.idempotent`, `Tool.durable`, freeform tools, or extension snapshot
+  hooks.
+- Host calls still receive a `<runId>:<callId>` idempotency key. The bridge
+  still forwards only the decoded input to Pi, counts each admitted call once,
+  and does not store the key. `for...in` and `require` behavior is unchanged
+  from 2.2.7 and stays rejected before runtime construction or host effects.
+- Search ranking now uses a word index. Exact path lookup, empty-query
+  pagination, and the callable-only catalog are unchanged. A missing flat tool
+  still fails as `UnknownTool` with the same search suggestion. Namespace
+  wording can name child tools; this extension registers only flat tools.
+- Replace the obsolete "legacy runtime has no `program` or `resume`" assertions
+  with the bytecode runtime shape. Keep the key, budget, and decoded-input
+  assertions, and assert the bridge source still does not suspend.
+
 ### Development baseline and host security
 
 - Refresh the default development/test lockfile from Pi/TUI **1.3.0** to
