@@ -11,6 +11,17 @@ const CALL_STATES = new Map([
   ["error", ["✗", "error"]], ["cancelled", ["⊘", "muted"]],
 ]);
 
+// Text from the model, guest runtime and host tools is display data, not ANSI.
+// Preserve intentional line breaks, but make C0/C1 and bidi controls visible
+// before syntax highlighting or theme styling introduces trusted escapes.
+const TERMINAL_CONTROLS = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f]|\p{Bidi_Control}/gu;
+function neutralizeTerminalControls(text) {
+  return text.replace(TERMINAL_CONTROLS, (control) => {
+    const code = control.codePointAt(0);
+    return code <= 0xff ? `\\x${code.toString(16).padStart(2, "0")}` : `\\u{${code.toString(16)}}`;
+  });
+}
+
 // Match native Pi's row timer: seconds, then minutes/hours for longer runs.
 export function formatDuration(ms) {
   const seconds = Math.max(0, ms) / 1000;
@@ -118,18 +129,19 @@ class CallList {
     }
     for (const call of shown) {
       const [icon, color] = CALL_STATES.get(call.status) ?? ["?", "muted"];
-      const name = String(call.name ?? "unknown").replace(/[\r\n\t]/g, " ");
+      const name = neutralizeTerminalControls(String(call.name ?? "unknown")).replace(/\n/g, " ");
       const title = theme.fg(color, icon) + " " + theme.fg("toolTitle", name);
       const duration = finiteDuration(call.durationMs) ?
         theme.fg("dim", ` ${call.durationMs < 1000 ? `${Math.round(call.durationMs)}ms` : formatDuration(call.durationMs)}`) : "";
-      let args = typeof call.args === "string" ? call.args : "";
+      let args = typeof call.args === "string" ? neutralizeTerminalControls(call.args) : "";
       if (!expanded) args = truncateToWidth(args.replace(/\r/g, "\\r").replace(/\n/g, "\\n").replace(/\t/g, "\\t"),
         Math.max(0, width - visibleWidth(title) - visibleWidth(duration) - 1), "…");
       const line = title + (args ? " " + theme.fg("muted", args) : "") + duration;
       if (expanded) {
         lines.push(...new Text(line, 0, 0).render(width));
         if (typeof call.error === "string" && call.error) {
-          lines.push(...new Text(theme.fg("error", "    " + call.error.replace(/\n/g, "\n    ")), 0, 0).render(width));
+          const error = neutralizeTerminalControls(call.error).replace(/\n/g, "\n    ");
+          lines.push(...new Text(theme.fg("error", "    " + error), 0, 0).render(width));
         }
       } else {
         lines.push(truncateToWidth(line, width, "…"));
@@ -185,14 +197,17 @@ export function createOpenCodeRenderers({ highlightSource = highlightCode, forma
         if (notice) part("notice", [notice, theme], () => new Text(theme.fg("muted", notice), 0, 0));
         const shown = limited && expanded ? code : formatted;
         part("source", [shown, expanded, theme, hint, streaming, limited], () => {
-          const styled = streaming || limited ? shown.replace(/\t/g, "   ") :
-            highlightSource(shown.trimEnd().replace(/\t/g, "   "), "javascript").join("\n");
+          const safe = neutralizeTerminalControls(shown);
+          const styled = streaming || limited ? safe : highlightSource(safe.trimEnd(), "javascript").join("\n");
           return outputComponent(styled, CODE_PREVIEW_LINES, expanded, theme, hint);
         });
         if (changed && expanded) {
           part("spacer", [], () => new Spacer(1));
           part("originalLabel", [theme], () => new Text(theme.fg("muted", "Original source (execution and error locations)"), 0, 0));
-          part("original", [code, theme], () => new Text(highlightSource(code.trimEnd().replace(/\t/g, "   "), "javascript").join("\n"), 0, 0));
+          part("original", [code, theme], () => {
+            const safe = neutralizeTerminalControls(code);
+            return new Text(highlightSource(safe.trimEnd(), "javascript").join("\n"), 0, 0);
+          });
         }
       });
     },
@@ -231,7 +246,7 @@ export function createOpenCodeRenderers({ highlightSource = highlightCode, forma
           if (output.length > 0) {
             part("outputSpacer", [], () => new Spacer(1));
             part("output", [output, color, expanded, theme, hint], () => {
-              const styled = output.replace(/\t/g, "   ").split("\n").map((line) => theme.fg(color, line)).join("\n");
+              const styled = neutralizeTerminalControls(output).split("\n").map((line) => theme.fg(color, line)).join("\n");
               return outputComponent(styled, OUTPUT_PREVIEW_LINES, expanded, theme, hint);
             });
           }
