@@ -11,9 +11,9 @@ and release/tag creation are explicit maintainer actions.
 - [ ] Check that the 0.2.0 notes distinguish synthetic path measurements from
       whole-app latency and describe coalesced frames/first-use backend loading.
 - [ ] Run `npm ci`, `npm audit`, and `npm run test:pi-versions`.
-- [ ] Configure `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET` Actions secrets, migrate
-      required checks to `Node/Pi compatibility on Modal`, and confirm its six
-      Modal matrix cells pass after the changes are pushed.
+- [ ] Configure `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET` Actions secrets, keep
+      `Node/Pi compatibility on Modal` out of required pull-request checks, and
+      confirm its six Modal matrix cells pass after the changes reach `main`.
 - [ ] Inspect `npm pack --dry-run --json`; check for secrets in the tree and history.
 - [ ] Check the README walkthrough with a configured model and inspect the TUI.
 - [ ] Review `CHANGELOG.md`, supported versions, and known limits.
