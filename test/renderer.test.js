@@ -325,10 +325,13 @@ test("result and call renderers retain only trusted terminal styling", () => {
   }] });
   const snapshot = structuredClone(value);
   for (const expanded of [false, true]) {
-    const raw = tool().renderResult(value, { expanded, isPartial: false }, ansiTheme, context()).render(20_000).join("\n");
+    const rendered = tool().renderResult(value, { expanded, isPartial: false }, ansiTheme, context()).render(20_000);
+    const raw = rendered.join("\n");
     assert.match(raw, /\x1b\[32m/, "theme SGR remains active");
     assert.doesNotMatch(raw, /\x1b\[31m|\x1b\]|\x9b/);
-    const displayed = stripVTControlCharacters(raw);
+    // Text pads each visual line to the render width. Ignore only that ASCII
+    // space padding, not indentation, line breaks or untrusted control bytes.
+    const displayed = rendered.map((line) => stripVTControlCharacters(line).replace(/ +$/u, "")).join("\n");
     assert.match(displayed, /first\nleft\\x1b\[31mred\\x1b\[0m/);
     assert.match(displayed, /\\x1b\]8;;https:\/\/example\.invalid\\x07link/);
     assert.match(displayed, /\\x9b2J\\x0d\\x08\\x09\\u\{202e\}right/);
