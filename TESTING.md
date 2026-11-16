@@ -138,9 +138,9 @@ Each workflow creates **one Modal app**, with six isolated Node/Pi calls running
 in parallel inside it. This avoids Modal's app-creation rate limit. Every cell
 finishes even if another fails; any failure fails the aggregate GitHub check.
 
-**Branch protection migration:** if the old six `Node … / Pi …` checks are
-required, replace them with `Node/Pi compatibility on Modal`. The upstream
-workflow reports `Latest CodeMode compatibility on Modal`.
+`Node/Pi compatibility on Modal` is a post-merge `main` check and must not be
+configured as a required pull-request check. The upstream post-merge workflow
+reports `Latest CodeMode compatibility on Modal`.
 
 `ci/modal_ci.py` uses `node:22.19.0-bookworm-slim` and
 `node:24-bookworm-slim` with Python 3.11. Each test function has 1 CPU, 2 GiB
@@ -159,11 +159,11 @@ Actions secrets (organization secrets must grant this repository access):
 - `MODAL_TOKEN_ID`
 - `MODAL_TOKEN_SECRET`
 
-Missing tokens fail with an explicit setup error. Fork PR events are skipped
-because GitHub does not expose secrets to them; `pull_request_target` is not
-used. Same-repository PRs and pushes to main run normally. For a fork change,
-use the trusted post-merge push check or manually dispatch a trusted ref.
-Do not manually run untrusted code with Modal credentials.
+Missing tokens fail with an explicit setup error. Pull-request events never run
+the credentialed Modal workflow, and `pull_request_target` is not used. Every
+change, including a same-repository or fork PR, is tested by the trusted
+post-merge push to `main`. Manual dispatch is intentionally unavailable so an
+unreviewed ref cannot be selected for a credential-bearing run.
 
 ### Local reproduction
 
@@ -203,20 +203,18 @@ runs do not mean GitHub Actions secrets or branch protection are configured.
 
 `.github/workflows/upstream-codemode.yml` automatically runs its latest-version
 checks when a same-repository PR **authored by `cursor[bot]` is merged into main**.
-Fork PR events are skipped because they cannot access the Modal token. Manual runs
-are also available through `workflow_dispatch`, independently of PR authorship.
-There is no weekly schedule. Closing a PR without merging, or merging a PR
-from another author, skips the automatic lookup and test matrix. The author is
-checked through `github.event.pull_request.user.login`, not `github.actor` or
-`merged_by.login`: a human can merge a Cursor-authored PR and still trigger
-the checks. PR #1 was verified through the GitHub REST API as authored by
+Fork PR events are skipped because they cannot access the Modal token. There is
+no manual dispatch or weekly schedule. Closing a PR without merging, or merging
+a PR from another author, skips the automatic lookup and test matrix. The author
+is checked through `github.event.pull_request.user.login`, not `github.actor` or
+`merged_by.login`: a human can merge a Cursor-authored PR and still trigger the
+checks. PR #1 was verified through the GitHub REST API as authored by
 `cursor[bot]` (the CLI GraphQL view displays this identity as `app/cursor`).
 
-For PR events, checkout is pinned to the merged revision; manual runs use the
-selected ref at dispatch time. Each qualifying PR gets its own run without a
-shared concurrency group dropping queued checks. This is
-separate from normal push/PR CI, which continues to test the release-pinned
-dependency for all authors on trusted events (see the fork policy above).
+Checkout is pinned to the merged revision. Each qualifying PR gets its own run
+without a shared concurrency group dropping queued checks. This is separate from
+normal post-merge `main` CI, which tests the release-pinned dependency after
+changes from every author reach the trusted branch.
 
 Each run queries the public npm registry on Modal for `@opencode/codemode@latest`, then
 uses that exact resolved version across all six Node/Pi combinations. Registry

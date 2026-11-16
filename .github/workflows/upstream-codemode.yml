@@ -4,7 +4,6 @@ on:
   pull_request:
     types: [closed]
     branches: [main]
-  workflow_dispatch:
 
 # Checks only: no repository writes, auto-merge, release or npm publication.
 permissions:
@@ -15,14 +14,14 @@ jobs:
     name: Latest CodeMode compatibility on Modal
     # Check the PR author, not the merger or triggering actor.
     # Fork pull_request events do not receive secrets, even after merging.
-    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true && github.event.pull_request.user.login == 'cursor[bot]' && github.event.pull_request.head.repo.full_name == github.repository)
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true && github.event.pull_request.user.login == 'cursor[bot]' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          # PR runs test the merged revision; manual runs test the selected ref.
-          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          # Test the merged revision, never the pull-request head.
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
           persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
