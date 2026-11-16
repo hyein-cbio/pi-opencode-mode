@@ -5,7 +5,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { createCodemodeExtension, initTheme } from "@earendil-works/pi-coding-agent";
 import { Box, visibleWidth } from "@earendil-works/pi-tui";
 import { createOpenCodeModeExtension } from "../index.js";
-import { formatDuration } from "../renderer.js";
+import { createOpenCodeRenderers, formatDuration } from "../renderer.js";
 
 // Built-in palette only, no watcher or personal settings/resources.
 initTheme("dark", false);
@@ -283,6 +283,57 @@ test("result previews preserve indentation and trailing blank lines", () => {
   }
   assert.deepEqual(value, snapshot);
   assert.deepEqual(lines(tool().renderResult(result(""), { expanded: true, isPartial: false }, theme, context())), []);
+});
+
+test("source previews neutralize terminal and bidi controls before highlighting", () => {
+  const unsafe = `left\x1b[2J\x1b]52;c;Y2xpcA==\x07\x9bright\r\b\t\u202eend\x1b[`;
+  const controls = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f]|\p{Bidi_Control}/u;
+  const highlighted = [];
+  const definition = createOpenCodeRenderers({
+    formatSource: (code) => `formatted ${code}`,
+    highlightSource(code) { highlighted.push(code); return [code]; },
+  });
+  const inspect = (component) => {
+    const displayed = component.render(20_000).join("\n");
+    assert.doesNotMatch(displayed, controls);
+    assert.match(displayed, /\\x1b\[2J/);
+    assert.match(displayed, /\\x1b\]52;c;Y2xpcA==\\x07/);
+    assert.match(displayed, /\\x9b/);
+    assert.match(displayed, /\\x0d\\x08\\x09/);
+    assert.match(displayed, /\\u\{202e\}/);
+    assert.match(displayed, /end\\x1b\[/);
+  };
+
+  const completeContext = context({ expanded: true });
+  inspect(definition.renderCall({ code: unsafe }, theme, completeContext));
+  assert.ok(highlighted.length >= 2, "formatted and original source both pass through the highlighter");
+  for (const code of highlighted) assert.doesNotMatch(code, controls);
+  assert.equal(completeContext.state.sourcePreview.code, unsafe, "cached execution source remains unchanged");
+
+  inspect(definition.renderCall({ code: unsafe }, theme, context({ argsComplete: false })));
+  inspect(definition.renderCall({ code: unsafe + "x".repeat(9000) }, theme, context({ expanded: true })));
+});
+
+test("result and call renderers retain only trusted terminal styling", () => {
+  const unsafe = `left\x1b[31mred\x1b[0m\x1b]8;;https://example.invalid\x07link\x1b]8;;\x07\x9b2J\r\b\t\u202eright`;
+  const ansiTheme = {
+    fg(_color, value) { return `\x1b[32m${value}\x1b[39m`; },
+    bold(value) { return `\x1b[1m${value}\x1b[22m`; },
+  };
+  const value = result(`first\n${unsafe}\nlast`, { calls: [{
+    name: unsafe, args: unsafe, status: "error", error: `first\n${unsafe}\nlast`,
+  }] });
+  const snapshot = structuredClone(value);
+  for (const expanded of [false, true]) {
+    const raw = tool().renderResult(value, { expanded, isPartial: false }, ansiTheme, context()).render(20_000).join("\n");
+    assert.match(raw, /\x1b\[32m/, "theme SGR remains active");
+    assert.doesNotMatch(raw, /\x1b\[31m|\x1b\]|\x9b/);
+    const displayed = stripVTControlCharacters(raw);
+    assert.match(displayed, /first\nleft\\x1b\[31mred\\x1b\[0m/);
+    assert.match(displayed, /\\x1b\]8;;https:\/\/example\.invalid\\x07link/);
+    assert.match(displayed, /\\x9b2J\\x0d\\x08\\x09\\u\{202e\}right/);
+  }
+  assert.deepEqual(value, snapshot, "terminal neutralization changes presentation only");
 });
 
 test("warnings and incomplete-output notice stay visible when data is collapsed", () => {
