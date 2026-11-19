@@ -104,6 +104,8 @@ test("switch and CodeMode constructors stay in OpenCode", () => {
     'return new URLSearchParams();',
     'return new WeakMap();',
     'return new AggregateError([]);',
+    // 2.3.2 adds a Buffer global. Calling Buffer.from is admitted; constructing one is not.
+    'return new Buffer("hi");',
   ]) assert.equal(checkOpenCodeCompatibility(code).reasons[0], "uncertain-constructor", code);
 });
 

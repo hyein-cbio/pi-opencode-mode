@@ -20,7 +20,7 @@ When updating the matrix, keep `test/pi-versions.test.js` and
 The default `npm ci` tree now locks matching **Pi/TUI 1.5.0**. This is separate
 from the intentional **0.99.0 / 1.3.0 / 1.4.0** compatibility matrix; neither
 its versions nor the public **>= 0.99.0, < 2.0.0** peer range is narrowed.
-The current runtime pin is CodeMode **2.3.0**. Effect **4.1.0** and Acorn
+The current runtime pin is CodeMode **2.3.2**. Effect **4.1.0** and Acorn
 **8.15.0** stay exact. The default Pi/TUI **1.5.0** lockfile and the public
 peer range are unchanged by that bump.
 
@@ -53,7 +53,7 @@ npm test
 ```
 
 After dependencies are installed, the tests do not install SDKs or use model
-APIs. The release pin under test is `@opencode/codemode` **2.3.0** with Effect
+APIs. The release pin under test is `@opencode/codemode` **2.3.2** with Effect
 **4.1.0**. Without
 `PI_OPENCODE_SDK`, the `isolated real Pi SDK session` suite explicitly skips.
 The boundary tests include literal 30-second
@@ -100,7 +100,7 @@ This opt-in command installs from npm. For each supported baseline it:
 
 It does not alter the source checkout's dependencies or personal Pi settings.
 The release pin this command installs and verifies is `@opencode/codemode`
-**2.3.0** with Effect **4.1.0**. The following counts describe PR #6's
+**2.3.2** with Effect **4.1.0**. The following counts describe PR #6's
 independent dependency-only baseline, before the local presentation/loading
 changes. On Node **v22.23.4** (Linux x64), `npm test`
 passed **83** tests, failed **0**, and skipped **1** (`isolated real Pi SDK
@@ -609,6 +609,54 @@ cell used CodeMode 2.3.0 and matching Pi/TUI **0.99.0**, **1.3.0**, and
 **1.4.0**. Each inner suite was tests 116, pass 116, fail 0, skipped 0.
 `PI_OPENCODE_UPSTREAM_VERSION` and `PI_OPENCODE_TEST_VERSION` were unset.
 Local Node 24.22.3 is not the hosted `node:24` image.
+
+## CodeMode 2.3.2 verification — 2026-11-19
+
+Local only, on Linux 6.12.113+ x86_64. Starting main was
+`50690d9e4eddc583b6fd1f30b4ce60634c4c79f1`, which pinned CodeMode **2.3.0**,
+Effect **4.1.0**, and Acorn **8.15.0**. The candidate keeps Effect and Acorn
+and pins CodeMode **2.3.2**. `npm view @opencode/codemode dist-tags.latest`
+returned `2.3.2` at 2026-11-19T15:02:45Z (semver 7.7.4 `compare` is 1; no
+prerelease). Other dist-tags were ignored (`reserved` `0.0.0-reserved`,
+`beta` `0.0.0-beta-19507`, `dev` `0.0.0-dev-1315`). No open pull request
+existed for 2.3.2. Hosted Modal CI has not run on this candidate. macOS was
+not exercised. No live model API and no new benchmark.
+
+The published artifacts are the comparison baseline. Neither 2.3.0 nor 2.3.2
+has `gitHead`, `engines`, or peer metadata. Both depend on exact Effect
+**4.1.0** and Acorn **8.15.0**. 2.3.2 reorganizes the package into
+`dist/language` and `dist/codemode`; the public export still provides
+`CodeMode.make`, `runtime.execute`, `Tool.make`, and `toolError`. Direct
+execution of both artifacts showed the same `for...in` snapshot divergence,
+the same `require`/`import` globals, the same flat `UnknownTool` wording, the
+same `<runId>:<callId>` keys, and the same early-return and deadline
+behavior. `search("tools.read")` is newly `search({ query: "tools.read" })`
+and counts toward `maxToolCalls`. A Node `Buffer` global is new;
+`Buffer.allocUnsafe` is zero-filled, and a `Buffer` or `Uint8Array` passed to
+a tool fails as `InvalidDataValue` before the host runs. `new Buffer` stays
+outside the constructor allowlist. The OpenCode `v2.3.2` GitHub release notes
+describe GPT prompt caching, not this package. The tag compare did not return
+`packages/codemode` files, so the verified tarball diff is the change record.
+
+On Node **v22.23.4**, a fresh `npm ci --ignore-scripts` exited 0 and installed
+CodeMode 2.3.2, Effect 4.1.0, Acorn 8.15.0, and Pi/TUI 1.5.0, with one shared
+Effect module path. `npm test` without `PI_OPENCODE_SDK` exited 0: tests 109,
+pass 108, fail 0, skipped 1 (`isolated real Pi SDK session`). With
+`PI_OPENCODE_SDK` pointed at that install, `npm test` exited 0: tests 120,
+pass 120, fail 0, skipped 0, Actual SDK 1.5.0. `npm pack --dry-run` lists 11
+files and `git diff --check` is clean.
+
+`npm run test:pi-versions` exited 0 on Node **v22.19.0**, **v22.23.4**, and
+**v24.22.2**. Each parent run was tests 3, pass 3, fail 0, skipped 0. Every
+cell used CodeMode 2.3.2 and matching Pi/TUI **0.99.0**, **1.3.0**, and
+**1.4.0**. Each inner suite was tests 120, pass 120, fail 0, skipped 0.
+`PI_OPENCODE_UPSTREAM_VERSION` and `PI_OPENCODE_TEST_VERSION` were unset.
+Local Node 24.22.2 is not the hosted `node:24` image.
+
+The new string-search and Buffer tests failed on the previous 2.3.0 pin
+(InvalidToolInput for `search("tools.read")`, and `ReferenceError` for
+`Buffer`) and passed after the pin moved to 2.3.2. No production source fix
+was required.
 
 ## Additional release checks
 
