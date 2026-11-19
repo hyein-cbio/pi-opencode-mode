@@ -1,13 +1,20 @@
 # Changelog
 
-## Unreleased
+## 0.2.1 — Unreleased
 
 ### Dependency update
 
-- Keep the exact `@opencode/codemode` pin at **2.3.0**. Testing 2.3.2 found
-  guest tool input conversion drops callable `toJSON` methods instead of
-  invoking them, changing both top-level and nested host-tool arguments.
-  Upgrade only after an upstream fix or corrected release.
+- Keep `@opencode/codemode` pinned to **2.3.0**, the only verified runtime.
+  Resolve and inspect its actual ESM package lazily; reject other or unreadable
+  versions with `UnsupportedCodeModeVersion` before running guest code.
+  Published **2.3.1 and 2.3.2** intentionally drop custom `toJSON` methods
+  before the Pi bridge receives input. The public API offers no equivalent
+  pre-conversion hook, so these releases are not supported. See the
+  [serialization comparison](TESTING.md#codemode-tool-input-serialization).
+- Test the locked Pi/TUI **1.5.0** pair as well as the three older Pi baselines
+  on both Node versions in Modal CI. Also install **2.3.1** and **2.3.2** in
+  separate cells and verify refusal through Pi’s real extension loader. The
+  independent npm-latest compatibility check still fails if latest is refused.
 - Bump the exact `@opencode/codemode` pin from **2.2.7** to **2.3.0**. Effect
   stays the published exact dependency **4.1.0**, and Acorn stays **8.15.0**.
   The extension and CodeMode still load one shared Effect module.

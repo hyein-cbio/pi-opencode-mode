@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { findPackageJSON } from "node:module";
 import { Type } from "typebox";
 import { PREFLIGHT_LIMITS, checkOpenCodeCompatibility } from "./route.js";
 import { openCodeRenderers } from "./renderer.js";
@@ -46,11 +48,41 @@ async function callPiTool(ctx, name, input, signal) {
   return textOf(outcome?.result);
 }
 
+const CODEMODE_PACKAGE = "@opencode/codemode";
+const VERIFIED_CODEMODE_VERSION = "2.3.0";
+
+class UnsupportedCodeModeVersion extends Error {
+  constructor(reason) {
+    super(`Source was not executed. ${reason} Install ${CODEMODE_PACKAGE}@${VERIFIED_CODEMODE_VERSION} to preserve tool input serialization. No automatic delegation or replay was attempted.`);
+  }
+}
+
 // Load modules once, not a runtime: every execution still owns its tools,
 // permissions context, signals and call log. Registration/preflight stay cheap.
 async function loadBackend() {
+  // Read the manifest owning the ESM entry we will import, not our dependency
+  // declaration, lockfile, or the CJS resolution of the package name.
+  const entry = import.meta.resolve(CODEMODE_PACKAGE);
+  let manifest;
+  try {
+    const path = findPackageJSON(entry);
+    if (path) manifest = JSON.parse(await readFile(path, "utf8"));
+  } catch {
+    // An absent, unreadable, or invalid manifest leaves the version unknown.
+  }
+  if (manifest?.name !== CODEMODE_PACKAGE || typeof manifest.version !== "string" || !manifest.version) {
+    throw new UnsupportedCodeModeVersion(`Could not identify the installed ${CODEMODE_PACKAGE} version from its resolved entry.`);
+  }
+  // Admit only the exact verified release; a SemVer range would incorrectly
+  // promise behavior for other releases, prereleases, or build variants.
+  if (manifest.version !== VERIFIED_CODEMODE_VERSION) {
+    const reason = ["2.3.1", "2.3.2"].includes(manifest.version)
+      ? "it drops custom toJSON methods before tool input reaches Pi, with no public pre-conversion hook"
+      : "its tool input serialization is unverified";
+    throw new UnsupportedCodeModeVersion(`${CODEMODE_PACKAGE} ${JSON.stringify(manifest.version)} is not supported: ${reason}.`);
+  }
   const [{ CodeMode, Tool, toolError }, { Effect }] = await Promise.all([
-    import("@opencode/codemode"), import("effect"),
+    import(entry), import("effect"),
   ]);
   return { CodeMode, Tool, toolError, Effect };
 }
@@ -264,7 +296,10 @@ export function createOpenCodeModeExtension({ parseSource, loadRuntime = loadBac
         } catch (error) {
           return finish(renderResult({
             ok: false,
-            error: { kind: "ExecutionFailure", message: signal?.aborted ? "Script interrupted" : message(error) },
+            error: {
+              kind: !signal?.aborted && error instanceof UnsupportedCodeModeVersion ? "UnsupportedCodeModeVersion" : "ExecutionFailure",
+              message: signal?.aborted ? "Script interrupted" : message(error),
+            },
             toolCalls: [],
           }));
         } finally {

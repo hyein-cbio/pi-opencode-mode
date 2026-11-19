@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { createOpenCodeModeExtension } from "../index.js";
+import { commonInputCases, customToJSONCases } from "./fixtures/tool-input-serialization.js";
 
 function registeredTool() {
   const tools = [];
@@ -157,36 +158,33 @@ test("custom toJSON methods serialize top-level and nested host tool inputs", as
       return { result: { content: [{ type: "text", text: "mocked" }] } };
     },
   };
+  const tool = registeredTool();
   const cases = [
-    {
-      code: 'return await tools.read({ path: "wrong", toJSON() { return { path: "README.md" }; } });',
-      args: { path: "README.md" },
-    },
-    {
-      code: 'return await tools.read({ path: "README.md", options: { mode: "wrong", toJSON() { return { mode: "recursive" }; } } });',
-      args: { path: "README.md", options: { mode: "recursive" } },
-    },
-    {
-      code: 'return await tools.read({ toJSON() { return {}; } });',
-      args: {},
-    },
+    ...customToJSONCases.map(({ name, code, rawOnly, legacy }) => ({ name, code, rawOnly, ...legacy })),
+    ...commonInputCases,
   ];
-
-  for (const [index, { code, args }] of cases.entries()) {
-    const result = await registeredTool().execute(`json-${index}`, { code }, undefined, undefined, ctx);
-    assert.equal(result.details.preflight.supported, true, code);
-    assert.equal(result.details.ok, true, result.content[0].text);
-    assert.equal(result.content[0].text, '"mocked"');
-    assert.deepEqual(calls[index], { name: "read", args });
+  for (const { name, code, args, error, rawOnly, value = "mocked" } of cases) {
+    const result = await tool.execute(name, { code }, undefined, undefined, ctx);
+    assert.equal(result.details.preflight.supported, !rawOnly, name);
+    if (rawOnly) {
+      assert.equal(result.details.error.kind, "NativeCodemodeRequired", name);
+      assert.ok(result.details.preflight.reasons.includes("unsupported-syntax:ThisExpression"), name);
+      assert.deepEqual(calls.splice(0), [], name);
+    } else if (error) {
+      assert.equal(result.isError, true, name);
+      assert.equal(result.details.error.kind, error.kind, name);
+      assert.match(result.details.error.message, error.message, name);
+      assert.deepEqual(calls.splice(0), [], name);
+      assert.deepEqual(result.details.calls, [], name);
+      assert.deepEqual(result.details.toolCalls, [], name);
+    } else {
+      assert.equal(result.details.ok, true, result.content[0].text);
+      assert.equal(JSON.parse(result.content[0].text), value, name);
+      assert.deepEqual(calls.splice(0), [{ name: "read", args }], name);
+      assert.deepEqual(result.details.toolCalls, [{ name: "read" }], name);
+      assert.equal(result.details.calls.length, 1, name);
+    }
   }
-
-  const failed = await registeredTool().execute("json-error", {
-    code: 'return await tools.read({ toJSON() { throw new Error("serialize failed"); } });',
-  }, undefined, undefined, ctx);
-  assert.equal(failed.isError, true);
-  assert.equal(failed.details.error.kind, "ExecutionFailure");
-  assert.match(failed.details.error.message, /serialize failed/);
-  assert.deepEqual(calls, cases.map(({ args }) => ({ name: "read", args })));
 });
 
 test("prepareLoadout lists callable tools and omits itself", () => {

@@ -2,10 +2,10 @@
 
 A small Pi extension that leaves native `codemode` in place and lets you choose OpenCode CodeMode too.
 
-**Version 0.2.0** is the published release. This checkout pins
+**Version 0.2.1** is available from this source checkout and is not yet
+published. The published release is **0.2.0**. This checkout pins
 `@opencode/codemode` **2.3.0** and Effect **4.1.0**. See the
-[changelog](CHANGELOG.md) for the published 0.2.0 notes and the unreleased
-dependency update.
+[changelog](CHANGELOG.md) for both versions.
 
 It registers **`codemode_o`**, backed by `@opencode/codemode` 2.3.0 and Effect 4.1.0: another execution option for short, self-contained JavaScript-like programs that call Pi tools. Host calls retain Pi's validation, permission/result hooks, and nested-call audit; cancellation waits for host cleanup, and output keeps bounded, visible diagnostics.
 
@@ -30,7 +30,7 @@ interpreter choice, not an OpenCode server or a replacement Pi CLI.
 
 ## Install
 
-To use **0.2.0 from an existing source checkout**, install its exact dependencies
+To use **0.2.1 from an existing source checkout**, install its exact dependencies
 and load that checkout directly:
 
 ```sh
@@ -71,11 +71,11 @@ in the compatibility matrix are not security recommendations. Peer dependencies
 are not bundled in this extension, but an existing vulnerable Pi installation
 can still affect you. Update Pi independently of this extension.
 
-1. **Install from source for the walkthrough.** Use the **v0.2.0** release tag
-   so the examples and dependency pins match this version.
+1. **Install from source for the walkthrough.** Use the current `main`
+   checkout for the examples and dependency pins in this README.
 
    ```sh
-   git clone --branch v0.2.0 https://github.com/hyein-cbio/pi-opencode-mode.git
+   git clone --branch main https://github.com/hyein-cbio/pi-opencode-mode.git
    cd pi-opencode-mode
    npm ci
    ```
@@ -266,7 +266,24 @@ The historical `selectCodemodeRoute` helper and `ROUTE_LIMITS` alias remain for 
 - Raw LF/CR inside ordinary quoted JS strings is invalid: use a JS `\n` escape, or `\\n` when embedding that source in a JSON `code` string. Heredoc text, Korean, and `/` inside a correctly escaped string are data, not unsupported JS syntax. Preflight does not automatically repair escaping.
 - Results include the compatibility outcome in `details.preflight`. `details.route` is retained as legacy metadata, not an executed dispatch, a guarantee that native is available, or a recommendation for invalid source. Once OpenCode execution starts, any failure stays an OpenCode failure: **no automatic fallback, retry, or replay**, since host tools may already have produced effects.
 
-The supported Pi range is **>= 0.99.0, < 2.0.0**, with matching Pi/TUI versions. Pi 0.99.0 introduced the callable-tool context and native `codemode` required by this extension. CI checks **0.99.0** (minimum), **1.3.0**, and **1.4.0** on Node **22.19.0** and **24.x**, running both the unit suite and isolated real-SDK sessions. The CI matrix is a set of regression baselines, not the complete list of supported versions; intermediate releases are not individually certified. All CI checks execute on Modal; GitHub Actions only dispatches them. See [Modal-backed CI](TESTING.md#modal-backed-ci) for token setup and the fork-PR policy.
+The supported Pi range is **>= 0.99.0, < 2.0.0**, with matching Pi/TUI versions. Pi 0.99.0 introduced the callable-tool context and native `codemode` required by this extension. CI runs the full suite and isolated real-SDK sessions with **0.99.0** (minimum), **1.3.0**, **1.4.0**, and **1.5.0** on Node **22.19.0** and **24.x**. On both Node baselines it also verifies that CodeMode **2.3.1** and **2.3.2** are rejected before guest execution, using the locked Pi/TUI **1.5.0** pair. The CI matrix is a set of regression baselines, not the complete list of supported versions; intermediate releases are not individually certified. All CI checks execute on Modal; GitHub Actions only dispatches them. See [Modal-backed CI](TESTING.md#modal-backed-ci) for token setup and the fork-PR policy.
+
+## CodeMode runtime version and tool input serialization
+
+Only the exact `@opencode/codemode` release **2.3.0** is supported. On the first
+execution that passes preflight, the extension resolves the CodeMode ESM entry,
+reads its owning package manifest, and imports that same entry only if the
+package name and version match. This is independent of the extension version,
+Pi version, and OpenCode CLI. Unverified releases (including prereleases and
+build variants) or unknown metadata produce `UnsupportedCodeModeVersion`
+before any guest runs or Pi tools are invoked. Restore the exact pin to recover.
+
+With 2.3.0, custom tool-input `toJSON()` methods run in the confined VM; if
+conversion throws, the affected tool is not called. **2.3.1 and 2.3.2** instead
+drop those methods before the input reaches Pi. The later behavior is
+intentional upstream and cannot be reversed by the Pi bridge. Neither string
+`search("query")` nor guest `Buffer` is part of the supported contract; use
+`search({ query: "query" })`. See [the comparison](TESTING.md#codemode-tool-input-serialization).
 
 ## Execution and output contract
 
@@ -367,14 +384,16 @@ peers alone does not establish that an installed Pi host is safe.
 
 `npm run test:pi-versions` is a separate, **network/install-enabled** compatibility
 matrix. Each disposable copy first installs and audits the default lockfile
-(failing on moderate/high findings), then installs the exact older Pi/TUI pair
-without saving it and runs the full suite, including real-SDK sessions, against
-**0.99.0, 1.3.0, and 1.4.0**. It does not audit-fix those intentional legacy
-fixtures. See [TESTING.md](TESTING.md) for reproduction commands and coverage limits.
+(failing on moderate/high findings), then uses the exact Pi/TUI pair for that
+cell without saving overrides. The full suite includes real-SDK sessions on
+**0.99.0, 1.3.0, 1.4.0, and 1.5.0**. Separate cells check the expected refusal
+of known incompatible CodeMode versions, not compatibility with them. The
+harness does not audit-fix the legacy fixtures. See [TESTING.md](TESTING.md)
+for reproduction commands and coverage limits.
 
 ## Project information
 
-- [0.2.0 release notes and release history](CHANGELOG.md)
+- [Changelog and release history](CHANGELOG.md)
 - [Security policy and private reporting](SECURITY.md)
 - [Bug reports and feature requests](https://github.com/hyein-cbio/pi-opencode-mode/issues)
 

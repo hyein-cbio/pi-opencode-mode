@@ -16,7 +16,9 @@ NODE_IMAGES = {
     "22.19.0": "node:22.19.0-bookworm-slim",
     "24.x": "node:24-bookworm-slim",
 }
-PI_VERSIONS = ("0.99.0", "1.3.0", "1.4.0")
+CURRENT_PI = "1.5.0"
+PI_VERSIONS = ("0.99.0", "1.3.0", "1.4.0", CURRENT_PI)
+REJECTED_CODEMODE_VERSIONS = ("2.3.1", "2.3.2")
 EXACT_VERSION = re.compile(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?", re.ASCII)
 app = modal.App("pi-opencode-mode-ci")
 
@@ -46,20 +48,28 @@ node22_image = make_image("22.19.0")
 node24_image = make_image("24.x")
 
 
-def validate_versions(pi_version, upstream_version):
+def validate_versions(pi_version, upstream_version, rejected_version):
     if pi_version not in PI_VERSIONS:
         raise ValueError(f"Unsupported Pi version: {pi_version}")
     if upstream_version and not EXACT_VERSION.fullmatch(upstream_version):
         raise ValueError("Upstream version must be an exact npm version")
+    if rejected_version and rejected_version not in REJECTED_CODEMODE_VERSIONS:
+        raise ValueError(f"Expected refusal is not defined for CodeMode {rejected_version}")
+    if upstream_version and rejected_version:
+        raise ValueError("Latest-upstream compatibility and expected refusal are separate checks")
 
 
-def _run_tests(pi_version, upstream_version=""):
-    validate_versions(pi_version, upstream_version)
+def _run_tests(pi_version, upstream_version="", rejected_version=""):
+    validate_versions(pi_version, upstream_version, rejected_version)
     env = {**os.environ, "PI_OPENCODE_TEST_VERSION": pi_version}
-    # A release-pinned run must not accidentally inherit a candidate version.
-    env.pop("PI_OPENCODE_UPSTREAM_VERSION", None)
-    if upstream_version:
-        env["PI_OPENCODE_UPSTREAM_VERSION"] = upstream_version
+    # Ignore inherited test modes; only explicit cell parameters select an override.
+    for key, version in (
+        ("PI_OPENCODE_UPSTREAM_VERSION", upstream_version),
+        ("PI_OPENCODE_REJECTED_VERSION", rejected_version),
+    ):
+        env.pop(key, None)
+        if version:
+            env[key] = version
     for command in (
         ["node", "--version"],
         ["python", "-m", "unittest", "discover", "-s", "ci", "-p", "test_*.py"],
@@ -80,13 +90,13 @@ test_node24 = app.function(
 
 
 @app.local_entrypoint()
-def run_tests(node_version: str, pi_version: str, upstream_version: str = ""):
-    """Dispatch one existing GitHub matrix cell; no Node commands run locally."""
-    validate_versions(pi_version, upstream_version)
+def run_tests(node_version: str, pi_version: str, upstream_version: str = "", rejected_version: str = ""):
+    """Dispatch one matrix cell; no Node commands run locally."""
+    validate_versions(pi_version, upstream_version, rejected_version)
     functions = {"22.19.0": test_node22, "24.x": test_node24}
     if node_version not in functions:
         raise ValueError(f"Unsupported Node version: {node_version}")
-    functions[node_version].remote(pi_version, upstream_version)
+    functions[node_version].remote(pi_version, upstream_version, rejected_version)
 
 
 @app.function(image=node24_image, cpu=1, memory=512, timeout=120, retries=0)
@@ -109,7 +119,7 @@ def report_latest(version):
         ("GITHUB_OUTPUT", f"version={version}\n"),
         ("GITHUB_STEP_SUMMARY",
          f"Testing npm latest on Modal: **@opencode/codemode@{version}** "
-         "across all six Node/Pi combinations.\n"),
+         f"across all {len(NODE_IMAGES) * len(PI_VERSIONS)} Node/Pi combinations.\n"),
     ):
         if path := os.environ.get(variable):
             with open(path, "a") as stream:
@@ -124,27 +134,32 @@ def latest():
 
 @app.local_entrypoint()
 def matrix(upstream: bool = False):
-    """One ephemeral app per workflow, with all six cells running on Modal."""
+    """Run release/full-suite and refusal lanes, or the independent npm-latest check."""
     version = resolve_latest.remote() if upstream else ""
     if upstream:
         report_latest(version)
+    cells = [(node, pi, version, "") for node in NODE_IMAGES for pi in PI_VERSIONS]
+    if not upstream:
+        # Audit/verify the default Pi SDK with each known incompatible artifact
+        # on both Node baselines. This is not an npm-latest compatibility check.
+        cells += [(node, CURRENT_PI, "", rejected)
+                  for node in NODE_IMAGES for rejected in REJECTED_CODEMODE_VERSIONS]
     failures = []
-    # Creating one app per cell can hit Modal's app-creation rate limit. Remote
-    # function calls share this app, but each call gets its own isolated inputs.
+    # Share one app, with isolated dependencies per cell. Keep the original
+    # concurrency cap even with the larger matrix to limit simultaneous work.
     with ThreadPoolExecutor(max_workers=6) as pool:
-        pending = {
-            pool.submit(run_tests, node, pi, version): (node, pi)
-            for node in NODE_IMAGES for pi in PI_VERSIONS
-        }
+        pending = {pool.submit(run_tests, *cell): cell for cell in cells}
         for future in as_completed(pending):
-            node, pi = pending[future]
+            node, pi, candidate, rejected = pending[future]
+            lane = (f"CodeMode {rejected} expected refusal" if rejected else
+                    f"CodeMode {candidate} (npm latest)" if candidate else "release-pinned CodeMode")
+            label = f"Node {node} / Pi {pi} / {lane}"
             try:
                 future.result()
             except Exception as error:
-                # A cell failure must not prevent the other five from finishing.
-                failures.append((node, pi))
-                print(f"FAIL Node {node} / Pi {pi}: {error}", flush=True)
+                failures.append(label)
+                print(f"FAIL {label}: {error}", flush=True)
             else:
-                print(f"PASS Node {node} / Pi {pi}", flush=True)
+                print(f"PASS {label}", flush=True)
     if failures:
         raise RuntimeError(f"Modal compatibility failures: {failures}")

@@ -1,4 +1,4 @@
-# Maintainer release checklist — 0.2.0
+# Maintainer release checklist — 0.2.1
 
 Preparation does not publish anything. Repository visibility, npm publication,
 and release/tag creation are explicit maintainer actions.
@@ -6,14 +6,15 @@ and release/tag creation are explicit maintainer actions.
 ## Before publishing
 
 - [ ] Review the diff; ensure `package.json`, the lockfile top level and its root
-      package entry all say `0.2.0`, and runtime pins are CodeMode `2.2.6`,
+      package entry all say `0.2.1`, and runtime pins are CodeMode `2.3.0`,
       Effect `4.1.0`, and Acorn `8.15.0`.
-- [ ] Check that the 0.2.0 notes distinguish synthetic path measurements from
-      whole-app latency and describe coalesced frames/first-use backend loading.
+- [ ] Check that the 0.2.1 notes explain the exact CodeMode support policy and
+      distinguish expected-refusal tests from compatibility tests.
 - [ ] Run `npm ci`, `npm audit`, and `npm run test:pi-versions`.
 - [ ] Configure `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET` Actions secrets, keep
       `Node/Pi compatibility on Modal` out of required pull-request checks, and
-      confirm its six Modal matrix cells pass after the changes reach `main`.
+      confirm its eight compatibility cells and four expected-refusal cells
+      pass after the changes reach `main`.
 - [ ] Inspect `npm pack --dry-run --json`; check for secrets in the tree and history.
 - [ ] Check the README walkthrough with a configured model and inspect the TUI.
 - [ ] Review `CHANGELOG.md`, supported versions, and known limits.
@@ -25,11 +26,11 @@ and release/tag creation are explicit maintainer actions.
       repository is public, and verify the reporting link in `SECURITY.md` works.
 - [ ] For npm publication, remove `private: true`, verify the npm package name
       is available to your account, and recheck the manifest/lockfile and tarball.
-- [ ] Mark the `0.2.0 — Unreleased` changelog entry released with the actual date,
-      create the `v0.2.0` tag and GitHub release, and publish the intended package
+- [ ] Mark the `0.2.1 — Unreleased` changelog entry released with the actual date,
+      create the `v0.2.1` tag and GitHub release, and publish the intended package
       version to npm.
 - [ ] Verify installation from the published source, then advance the README's
-      previous-release commands to the confirmed `0.2.0` npm/tag commands and
+      previous-release commands to the confirmed `0.2.1` npm/tag commands and
       update its preparation notice and the supported version in `SECURITY.md`.
 
 Do not advertise an npm package or tag before it exists. No workflow in this

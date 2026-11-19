@@ -1,6 +1,6 @@
 {
   "name": "pi-opencode-mode",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "license": "MIT",
   "publishConfig": {
     "access": "public",
@@ -38,7 +38,8 @@
     ]
   },
   "scripts": {
-    "test": "node --test test/extension.test.js test/route.test.js test/preflight.test.js test/renderer.test.js test/renderer-performance.test.js test/lazy-loading.test.js test/call-log.test.js test/source-preview.test.js test/readme.test.js test/boundaries.test.js test/session.test.js",
+    "test": "node --test test/extension.test.js test/codemode-serialization.test.js test/route.test.js test/preflight.test.js test/renderer.test.js test/renderer-performance.test.js test/lazy-loading.test.js test/call-log.test.js test/source-preview.test.js test/readme.test.js test/boundaries.test.js test/session.test.js",
+    "test:codemode-serialization": "node --test test/codemode-serialization.test.js",
     "test:pi-versions": "node --test test/pi-versions.test.js"
   },
   "dependencies": {

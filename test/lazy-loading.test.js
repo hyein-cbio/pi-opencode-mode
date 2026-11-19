@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { createOpenCodeModeExtension } from "../index.js";
 
 const exec = promisify(execFile);
@@ -58,6 +58,57 @@ test("registration and rejected preflight do not resolve backend dependencies in
   delete env.NODE_TEST_CONTEXT;
   const result = await exec(process.execPath, ["--input-type=module", "-e", program], { env, timeout: 15000 });
   assert.match(result.stdout, /lazy dependency boundary passed/);
+});
+
+test("unverified package metadata is rejected without evaluating the backend or guest", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pi-opencode-version-"));
+  try {
+    const fixtures = [
+      [undefined, /Could not identify/],
+      ["{", /Could not identify/],
+      [{ name: "different-package", version: "2.3.0" }, /Could not identify/],
+      ...["2.2.7", "2.3.2-rc.1", "2.3.0+custom", "2.3.10", "unknown"].map((version) =>
+        [{ name: "@opencode/codemode", version }, /serialization is unverified/]),
+    ];
+    const paths = await Promise.all(fixtures.map(async ([manifest, diagnostic], index) => {
+      const location = join(dir, String(index));
+      const backend = join(location, "index.mjs");
+      await mkdir(location);
+      await writeFile(backend, 'throw new Error("Must not evaluate an unverified backend");');
+      if (manifest !== undefined) {
+        await writeFile(join(location, "package.json"), typeof manifest === "string" ? manifest : JSON.stringify(manifest));
+      }
+      return [pathToFileURL(backend).href, diagnostic.source];
+    }));
+    const entry = new URL("../index.js", import.meta.url).href;
+    const program = `
+      import assert from "node:assert/strict";
+      import { registerHooks } from "node:module";
+      let backend;
+      registerHooks({ resolve(specifier, context, next) {
+        if (specifier === "@opencode/codemode") return { url: backend, shortCircuit: true };
+        return next(specifier, context);
+      } });
+      const { createOpenCodeModeExtension } = await import(${JSON.stringify(entry)});
+      for (const [url, diagnostic] of ${JSON.stringify(paths)}) {
+        backend = url;
+        let tool;
+        let readCatalog = false;
+        createOpenCodeModeExtension()({ registerTool(value) { tool = value; } });
+        const result = await tool.execute("unknown-version", { code: "return 42;" }, undefined, undefined, {
+          get tools() { readCatalog = true; return []; }
+        });
+        assert.equal(result.details.error.kind, "UnsupportedCodeModeVersion", result.content[0].text);
+        assert.match(result.details.error.message, new RegExp(diagnostic));
+        assert.equal(readCatalog, false);
+        assert.deepEqual(result.details.toolCalls, []);
+        assert.deepEqual(result.details.calls, []);
+      }
+    `;
+    await exec(process.execPath, ["--input-type=module", "-e", program], { timeout: 15000 });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test("Pi file/jiti loader executes lazy backend imports, not only inline test factories", async () => {

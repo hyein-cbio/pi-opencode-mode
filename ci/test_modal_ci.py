@@ -22,7 +22,11 @@ class ModalCITests(unittest.TestCase):
             for pi in ci.PI_VERSIONS:
                 with self.subTest(node=node, pi=pi), patch.object(ci, target) as function:
                     ci.run_tests(node, pi, "2.2.5")
-                    function.remote.assert_called_once_with(pi, "2.2.5")
+                    function.remote.assert_called_once_with(pi, "2.2.5", "")
+            for rejected in ("2.3.1", "2.3.2"):
+                with self.subTest(node=node, rejected=rejected), patch.object(ci, target) as function:
+                    ci.run_tests(node, "1.5.0", rejected_version=rejected)
+                    function.remote.assert_called_once_with("1.5.0", "", rejected)
 
     def test_full_matrix_uses_one_shared_upstream_lookup(self):
         for upstream in (False, True):
@@ -32,19 +36,24 @@ class ModalCITests(unittest.TestCase):
                     ci.matrix(upstream=upstream)
                     self.assertEqual(lookup.remote.call_count, int(upstream))
                     self.assertEqual(report.call_count, int(upstream))
-                self.assertEqual(sorted(call.args for call in run.call_args_list), sorted(
-                    (node, pi, "2.2.5" if upstream else "")
-                    for node in ci.NODE_IMAGES for pi in ci.PI_VERSIONS
-                ))
+                nodes = ("22.19.0", "24.x")
+                cells = [(node, pi, "2.2.5" if upstream else "", "")
+                         for node in nodes for pi in ("0.99.0", "1.3.0", "1.4.0", "1.5.0")]
+                if not upstream:
+                    cells += [(node, "1.5.0", "", rejected)
+                              for node in nodes for rejected in ("2.3.1", "2.3.2")]
+                self.assertCountEqual([call.args for call in run.call_args_list], cells)
 
     def test_matrix_finishes_other_cells_and_propagates_failure(self):
-        def cell(node, pi, version):
-            if (node, pi) == ("22.19.0", "0.99.0"):
+        def cell(node, pi, version, rejected):
+            if (node, pi, rejected) == ("22.19.0", "0.99.0", "") or (node, rejected) == ("24.x", "2.3.2"):
                 raise RuntimeError("cell failed")
         with patch.object(ci, "run_tests", side_effect=cell) as run:
-            with self.assertRaisesRegex(RuntimeError, "22.19.0"):
+            with self.assertRaises(RuntimeError) as failed:
                 ci.matrix()
-            self.assertEqual(run.call_count, 6)
+            self.assertEqual(run.call_count, 12)
+            self.assertIn("Node 22.19.0 / Pi 0.99.0 / release-pinned CodeMode", str(failed.exception))
+            self.assertIn("Node 24.x / Pi 1.5.0 / CodeMode 2.3.2 expected refusal", str(failed.exception))
 
     def test_matrix_lookup_failure_never_runs_pinned_fallback(self):
         with patch.object(ci, "resolve_latest") as lookup, patch.object(ci, "run_tests") as run:
@@ -55,15 +64,17 @@ class ModalCITests(unittest.TestCase):
 
     def test_reject_invalid_inputs_before_dispatch(self):
         for args in (("26.x", "1.4.0", ""), ("24.x", "0.1.0", ""),
-                     ("24.x", "1.4.0", "latest"), ("24.x", "1.4.0", "2.2.5\n")):
+                     ("24.x", "1.4.0", "latest"), ("24.x", "1.4.0", "2.2.5\n"),
+                     ("24.x", "1.5.0", "", "2.3.0"), ("24.x", "1.5.0", "", "2.3.9"),
+                     ("24.x", "1.5.0", "2.3.2", "2.3.2")):
             with self.subTest(args=args), self.assertRaises(ValueError):
                 ci.run_tests(*args)
 
     def test_full_suite_and_pack_with_selected_version(self):
-        for upstream in ("", "2.2.5"):
-            with self.subTest(upstream=upstream), patch.object(ci.subprocess, "run") as run:
-                with patch.dict(os.environ, {"PI_OPENCODE_UPSTREAM_VERSION": "stale"}):
-                    ci._run_tests("1.4.0", upstream)
+        for upstream, rejected in (("", ""), ("2.2.5", ""), ("", "2.3.1")):
+            with self.subTest(upstream=upstream, rejected=rejected), patch.object(ci.subprocess, "run") as run:
+                with patch.dict(os.environ, {"PI_OPENCODE_UPSTREAM_VERSION": "stale", "PI_OPENCODE_REJECTED_VERSION": "stale"}):
+                    ci._run_tests("1.4.0", upstream, rejected)
                 self.assertEqual([call.args[0] for call in run.call_args_list], [
                     ["node", "--version"],
                     ["python", "-m", "unittest", "discover", "-s", "ci", "-p", "test_*.py"],
@@ -76,6 +87,7 @@ class ModalCITests(unittest.TestCase):
                     env = call.kwargs["env"]
                     self.assertEqual(env["PI_OPENCODE_TEST_VERSION"], "1.4.0")
                     self.assertEqual(env.get("PI_OPENCODE_UPSTREAM_VERSION"), upstream or None)
+                    self.assertEqual(env.get("PI_OPENCODE_REJECTED_VERSION"), rejected or None)
 
     def test_command_failure_propagates_and_stops_checks(self):
         for failing_index in range(4):
@@ -129,6 +141,7 @@ class ModalCITests(unittest.TestCase):
                     ci.latest()
             self.assertEqual(output.read_text(), "existing=value\nversion=2.2.5\n")
             self.assertIn("@opencode/codemode@2.2.5", summary.read_text())
+            self.assertIn("8 Node/Pi combinations", summary.read_text())
 
     def test_source_upload_allowlist(self):
         image = MagicMock()
