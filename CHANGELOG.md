@@ -4,6 +4,10 @@
 
 ### Dependency update
 
+- Keep the exact `@opencode/codemode` pin at **2.3.0**. Testing 2.3.2 found
+  guest tool input conversion drops callable `toJSON` methods instead of
+  invoking them, changing both top-level and nested host-tool arguments.
+  Upgrade only after an upstream fix or corrected release.
 - Bump the exact `@opencode/codemode` pin from **2.2.7** to **2.3.0**. Effect
   stays the published exact dependency **4.1.0**, and Acorn stays **8.15.0**.
   The extension and CodeMode still load one shared Effect module.

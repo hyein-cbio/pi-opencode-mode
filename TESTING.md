@@ -610,6 +610,16 @@ cell used CodeMode 2.3.0 and matching Pi/TUI **0.99.0**, **1.3.0**, and
 `PI_OPENCODE_UPSTREAM_VERSION` and `PI_OPENCODE_TEST_VERSION` were unset.
 Local Node 24.22.3 is not the hosted `node:24` image.
 
+## CodeMode 2.3.2 candidate rejection
+
+With CodeMode 2.3.2 and inert mocked host tools, an extension-level execution
+showed custom `toJSON` methods are dropped during input conversion: a top-level
+method produced `{}` instead of `{ path: "README.md" }`, and a nested method
+produced `{ path: "README.md", options: {} }` instead of the transformed
+`options` object. No filesystem or external tool was used. The regression is
+covered against the retained 2.3.0 pin; do not upgrade until upstream fixes
+this behavior or publishes a corrected release.
+
 ## Additional release checks
 
 ```sh
