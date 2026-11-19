@@ -212,7 +212,7 @@ test("require and dynamic import stay rejected before host effects", async () =>
     assert.deepEqual(result.details.calls, [], source);
     assert.equal(params.code, source);
   }
-  // Property names are data. The identifier require is what 2.3.2 still binds.
+  // Property names are data. The identifier require is what 2.3.0 still binds.
   const property = await registeredTool().execute("require-property", {
     code: "return ({ require: 1 }).require;",
   }, undefined, undefined, { tools: [] });
@@ -227,116 +227,6 @@ test("require and dynamic import stay rejected before host effects", async () =>
   assert.deepEqual(await installedCodeModeValue('const m = require("util"); return Object.keys(m);'), ["TextEncoder", "TextDecoder"]);
   assert.equal(await installedCodeModeValue('return typeof require("crypto");'), "object");
   assert.equal(await installedCodeModeValue('return typeof import("url");'), "object");
-});
-
-test("string search is a counted lookup and cannot call host tools", async () => {
-  const calls = [];
-  const ctx = {
-    tools: [
-      { name: "read", description: "Read a file", parameters: { type: "object", properties: { path: { type: "string" } }, required: ["path"] } },
-      { name: "timezones", description: "List timezone names", parameters: { type: "object" } },
-    ],
-    async executeTool() {
-      calls.push("host");
-      assert.fail("search must not call host tools");
-    },
-  };
-  const run = async (code) => registeredTool().execute("search-string", { code }, undefined, undefined, ctx);
-  for (const code of ['return search("tools.read");', 'return search("read");']) {
-    const result = await run(code);
-    assert.equal(result.details.preflight.supported, true, code);
-    assert.equal(result.details.ok, true, result.content[0].text);
-    const value = JSON.parse(result.content[0].text);
-    assert.equal(value.items.length, 1, code);
-    assert.equal(value.items[0].path, "tools.read", code);
-    assert.equal(value.remaining, 0, code);
-    assert.equal(value.next, null, code);
-    assert.deepEqual(result.details.toolCalls, [{ name: "search" }], code);
-  }
-  const zones = await run('return search("zones");');
-  assert.equal(zones.details.ok, true, zones.content[0].text);
-  assert.deepEqual(JSON.parse(zones.content[0].text).items, []);
-  assert.deepEqual(zones.details.toolCalls, [{ name: "search" }]);
-  const extra = await run('return search("read", { limit: 1 });');
-  assert.equal(extra.isError, true);
-  assert.equal(extra.details.error.kind, "InvalidToolInput");
-  assert.deepEqual(extra.details.toolCalls, []);
-  const bad = await run("return search(1);");
-  assert.equal(bad.details.error.kind, "InvalidToolInput");
-  assert.deepEqual(bad.details.error.suggestions, [
-    'Pass search a query string or an object, such as search("issues") or search({ namespace: "github" }).',
-  ]);
-  assert.deepEqual(bad.details.toolCalls, []);
-  assert.deepEqual(calls, []);
-
-  const seen = [];
-  const budget = await Effect.runPromise(CodeMode.make({
-    tools: {
-      read: Tool.make({
-        description: "read",
-        input: { type: "object" },
-        output: { description: "JSON value" },
-        execute: (input) => {
-          seen.push(input);
-          return Effect.succeed(input);
-        },
-      }),
-    },
-    limits: { timeoutMs: 5_000, maxToolCalls: 1, maxOutputBytes: 4_096 },
-  }).execute('search("read"); return await tools.read({});'));
-  assert.equal(budget.ok, false);
-  assert.equal(budget.error.kind, "ToolCallLimitExceeded");
-  assert.match(budget.error.message, /tool-call limit of 1/);
-  assert.deepEqual(budget.toolCalls, [{ name: "search" }]);
-  assert.deepEqual(seen, []);
-});
-
-test("Buffer helpers execute and binary values never reach host tools", async () => {
-  const calls = [];
-  const ctx = {
-    tools: [{ name: "host", parameters: { type: "object" } }],
-    async executeTool(_name, args) {
-      calls.push(args);
-      return { result: { content: [{ type: "text", text: "reached" }] } };
-    },
-  };
-  const text = await registeredTool().execute("buffer-text", {
-    code: 'return Buffer.from("hi").toString();',
-  }, undefined, undefined, ctx);
-  assert.equal(text.details.preflight.supported, true);
-  assert.equal(text.details.ok, true, text.content[0].text);
-  assert.equal(JSON.parse(text.content[0].text), "hi");
-  assert.deepEqual(text.details.toolCalls, []);
-
-  const zeros = await registeredTool().execute("buffer-unsafe", {
-    code: "const bytes = Buffer.allocUnsafe(4); return [bytes.length, bytes[0], bytes[1], bytes[2], bytes[3]];",
-  }, undefined, undefined, ctx);
-  assert.equal(zeros.details.ok, true, zeros.content[0].text);
-  assert.deepEqual(JSON.parse(zeros.content[0].text), [4, 0, 0, 0, 0]);
-  assert.deepEqual(calls, []);
-
-  for (const code of [
-    'return await tools.host(Buffer.from("hi"));',
-    "return await tools.host(Uint8Array.from([1, 2]));",
-  ]) {
-    const blocked = await registeredTool().execute("buffer-cross", { code }, undefined, undefined, ctx);
-    assert.equal(blocked.isError, true, code);
-    assert.equal(blocked.details.preflight.supported, true, code);
-    assert.equal(blocked.details.error.kind, "InvalidDataValue", code);
-    assert.match(blocked.details.error.message, /Uint8Array cannot cross to a tool/, code);
-    assert.match(blocked.details.error.message, /pass text instead/, code);
-    assert.deepEqual(blocked.details.toolCalls, [], code);
-  }
-  assert.deepEqual(calls, []);
-
-  const source = 'await tools.host({}); return new Buffer("hi");';
-  const rejected = await registeredTool().execute("buffer-new", { code: source }, undefined, undefined, forbiddenContext);
-  assert.equal(rejected.isError, true);
-  assert.deepEqual(rejected.details.preflight.reasons, ["uncertain-constructor"]);
-  assert.equal(rejected.details.error.kind, "NativeCodemodeRequired");
-  assert.deepEqual(rejected.details.toolCalls, []);
-  assert.deepEqual(rejected.details.calls, []);
-  assert.equal(rejected.details.preflight.executesSource, false);
 });
 
 test("host calls receive an idempotency key without changing input or call accounting", async () => {

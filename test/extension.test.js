@@ -38,7 +38,7 @@ test("package is one OpenCode-backed pi extension", () => {
   assert.ok(changelog.includes(`## ${pkg.version} —`), "document the package version");
   assert.deepEqual(pkg.pi.extensions, ["./index.js"]);
   assert.deepEqual(Object.keys(pkg.dependencies).sort(), ["@opencode/codemode", "acorn", "effect"]);
-  assert.equal(pkg.dependencies["@opencode/codemode"], "2.3.2");
+  assert.equal(pkg.dependencies["@opencode/codemode"], "2.3.0");
   assert.equal(pkg.dependencies.effect, "4.1.0");
   assert.equal(pkg.dependencies.acorn, "8.15.0");
 });
@@ -146,6 +146,47 @@ test("runs a fresh confined program and calls one pi tool", async () => {
   }, undefined, undefined, host);
   assert.equal(nested.isError, true);
   assert.match(nested.content[0].text, /UnknownTool/);
+});
+
+test("custom toJSON methods serialize top-level and nested host tool inputs", async () => {
+  const calls = [];
+  const ctx = {
+    tools: [{ name: "read", parameters: { type: "object" } }],
+    async executeTool(name, args) {
+      calls.push({ name, args });
+      return { result: { content: [{ type: "text", text: "mocked" }] } };
+    },
+  };
+  const cases = [
+    {
+      code: 'return await tools.read({ path: "wrong", toJSON() { return { path: "README.md" }; } });',
+      args: { path: "README.md" },
+    },
+    {
+      code: 'return await tools.read({ path: "README.md", options: { mode: "wrong", toJSON() { return { mode: "recursive" }; } } });',
+      args: { path: "README.md", options: { mode: "recursive" } },
+    },
+    {
+      code: 'return await tools.read({ toJSON() { return {}; } });',
+      args: {},
+    },
+  ];
+
+  for (const [index, { code, args }] of cases.entries()) {
+    const result = await registeredTool().execute(`json-${index}`, { code }, undefined, undefined, ctx);
+    assert.equal(result.details.preflight.supported, true, code);
+    assert.equal(result.details.ok, true, result.content[0].text);
+    assert.equal(result.content[0].text, '"mocked"');
+    assert.deepEqual(calls[index], { name: "read", args });
+  }
+
+  const failed = await registeredTool().execute("json-error", {
+    code: 'return await tools.read({ toJSON() { throw new Error("serialize failed"); } });',
+  }, undefined, undefined, ctx);
+  assert.equal(failed.isError, true);
+  assert.equal(failed.details.error.kind, "ExecutionFailure");
+  assert.match(failed.details.error.message, /serialize failed/);
+  assert.deepEqual(calls, cases.map(({ args }) => ({ name: "read", args })));
 });
 
 test("prepareLoadout lists callable tools and omits itself", () => {

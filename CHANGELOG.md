@@ -4,23 +4,10 @@
 
 ### Dependency update
 
-- Bump the exact `@opencode/codemode` pin from **2.3.0** to **2.3.2**. Effect
-  stays the published exact dependency **4.1.0**, and Acorn stays **8.15.0**.
-  The extension and CodeMode still load one shared Effect module. There is no
-  production source change: `CodeMode.make` is still the bytecode runtime, and
-  this extension still calls only `runtime.execute`.
-- 2.3.2 accepts `search("tools.read")` as `search({ query: "tools.read" })`.
-  The string form is an already-admitted call, counts toward the tool-call
-  budget, and still does not invoke the listed host tools. A non-string,
-  non-object query fails as `InvalidToolInput` with a suggestion to pass a
-  query string or an options object. Exact lookup, empty-query pagination, and
-  the word index are unchanged: `zones` still does not match `timezones`.
-- 2.3.2 adds a Node `Buffer` global. `Buffer.from` and `Buffer.allocUnsafe`
-  run without host effects, and `allocUnsafe` is zero-filled. `new Buffer`
-  stays rejected before runtime construction. A `Buffer` or `Uint8Array`
-  passed to a tool fails as `InvalidDataValue` (`cannot cross to a tool`) and
-  does not call the host. `for...in` and `require` match 2.3.0 and stay
-  rejected before host effects.
+- Keep the exact `@opencode/codemode` pin at **2.3.0**. Testing 2.3.2 found
+  guest tool input conversion drops callable `toJSON` methods instead of
+  invoking them, changing both top-level and nested host-tool arguments.
+  Upgrade only after an upstream fix or corrected release.
 - Bump the exact `@opencode/codemode` pin from **2.2.7** to **2.3.0**. Effect
   stays the published exact dependency **4.1.0**, and Acorn stays **8.15.0**.
   The extension and CodeMode still load one shared Effect module.
