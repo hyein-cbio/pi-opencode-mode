@@ -2,10 +2,9 @@
 
 A small Pi extension that leaves native `codemode` in place and lets you choose OpenCode CodeMode too.
 
-**Version 0.2.1** is available from this source checkout and is not yet
-published. The published release is **0.2.0**. This checkout pins
-`@opencode/codemode` **2.3.0** and Effect **4.1.0**. See the
-[changelog](CHANGELOG.md) for both versions.
+**Version 0.2.1** is published on npm. It pins `@opencode/codemode`
+**2.3.0** and Effect **4.1.0**. See the [changelog](CHANGELOG.md) for
+release details.
 
 It registers **`codemode_o`**, backed by `@opencode/codemode` 2.3.0 and Effect 4.1.0: another execution option for short, self-contained JavaScript-like programs that call Pi tools. Host calls retain Pi's validation, permission/result hooks, and nested-call audit; cancellation waits for host cleanup, and output keeps bounded, visible diagnostics.
 
@@ -42,13 +41,13 @@ Reload/restart Pi after updating the checkout. Alternatively, install the
 versioned npm package in Pi:
 
 ```sh
-pi install npm:pi-opencode-mode@0.2.0
+pi install npm:pi-opencode-mode@0.2.1
 ```
 
 Or install the tagged Git source:
 
 ```sh
-pi install git:github.com/hyein-cbio/pi-opencode-mode@v0.2.0
+pi install git:github.com/hyein-cbio/pi-opencode-mode@v0.2.1
 ```
 
 Restart Pi after installation. To explicitly enable both code tools:
