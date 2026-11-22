@@ -5,8 +5,8 @@
 - Node.js **>= 22.19.0**.
 - Pi and Pi TUI **>= 0.99.0, < 2.0.0**, with matching versions.
 - Release CI covers Node **22.19.0 / 24.x** × Pi **0.99.0 / 1.3.0 / 1.4.0 / 1.5.0**.
-- Separate runtime-refusal cells cover CodeMode **2.3.1 / 2.3.2** on both Node
-  baselines with the locked **Pi/TUI 1.5.0** pair.
+- The full suite runs with locked CodeMode **2.3.0** on those eight cells and
+  with each of **2.3.1 / 2.3.2** on both Node versions using **Pi/TUI 1.5.0**.
 
 Pi 0.99.0 is the minimum supported version: it introduced the callable-tool
 context and native `codemode` used by this extension. The original loader/mock
@@ -22,9 +22,9 @@ When updating the matrix, keep `test/pi-versions.test.js` and
 The default `npm ci` tree now locks matching **Pi/TUI 1.5.0**. This is separate
 from the intentional **0.99.0 / 1.3.0 / 1.4.0** compatibility matrix; neither
 its versions nor the public **>= 0.99.0, < 2.0.0** peer range is narrowed.
-The current runtime pin is CodeMode **2.3.0**. Effect **4.1.0** and Acorn
-**8.15.0** stay exact. The default Pi/TUI **1.5.0** lockfile and the public
-peer range are unchanged by that bump.
+The checkout lockfile uses CodeMode **2.3.0** as the baseline, while the
+package manifest also allows **2.3.1** and **2.3.2**. Effect **4.1.0**,
+Acorn **8.15.0**, and the default Pi/TUI lockfile are unchanged.
 
 For the default environment, check the **full** dependency tree, including peers:
 
@@ -39,8 +39,8 @@ install and before replacing Pi/TUI with an older pair. Moderate/high findings
 fail that default-baseline check. It does not audit or automatically fix the
 intentionally old compatibility tree after the override. No `audit fix`,
 transitive dependency override or minimum-peer increase is used to hide alerts.
-The six older-Pi release cells remain, with the locked Pi pair and the
-CodeMode-refusal cells added separately.
+The six older-Pi cells run with CodeMode **2.3.0**; the locked Pi pair runs
+with all three supported CodeMode releases.
 
 An unbundled peer is not necessarily harmless: users running a vulnerable host
 can still be affected. Recommend an up-to-date matching Pi/TUI pair within the
@@ -56,9 +56,9 @@ npm test
 ```
 
 After dependencies are installed, the tests do not install SDKs or use model
-APIs. The release pin under test is `@opencode/codemode` **2.3.0** with Effect
-**4.1.0**. Without
-`PI_OPENCODE_SDK`, the `isolated real Pi SDK session` suite explicitly skips.
+APIs. With the checkout lockfile this tests `@opencode/codemode` **2.3.0** and
+Effect **4.1.0**. Without `PI_OPENCODE_SDK`, the `isolated real Pi SDK session`
+suite explicitly skips.
 The boundary tests include literal 30-second
 timeout and delayed-cleanup probes, so the suite takes at least 30 seconds.
 
@@ -70,14 +70,14 @@ To use the SDK installed by `npm ci`:
 PI_OPENCODE_SDK="$PWD/node_modules/@earendil-works/pi-coding-agent" npm test
 ```
 
-Expected result: **125 passed, 0 skipped**, including SDK sessions and the
+Expected result: **126 passed, 0 skipped**, including SDK sessions and the
 CodeMode version and serialization regressions. To run only the session suite:
 
 ```sh
 PI_OPENCODE_SDK="$PWD/node_modules/@earendil-works/pi-coding-agent" node --test test/session.test.js
 ```
 
-Expected result: **12 passed, 0 skipped**. You can also supply an absolute path to
+Expected result: **13 passed, 0 skipped**. You can also supply an absolute path to
 another installed SDK package directory. For an exact dependency-version test,
 use the clean-copy matrix below rather than mixing a local host installation
 with another SDK directory.
@@ -91,21 +91,20 @@ npm run test:pi-versions
 This opt-in command installs from npm. For each supported baseline it:
 
 1. Copies only package files, the lockfile, and tests into a unique temp directory.
-2. Runs `npm ci --ignore-scripts` and verifies the default installed Pi/TUI
-   versions match the lockfile (**1.5.0**).
+2. Runs `npm ci --ignore-scripts` and verifies that the installed Pi/TUI
+   (**1.5.0**) and CodeMode (**2.3.0**) match the lockfile.
 3. Runs `npm audit --audit-level=moderate` on that default tree, **including
-   peers**, before any legacy override.
-4. Installs an exact Pi/TUI or CodeMode override when requested, without saving
-   it, editing the manifest/lockfile, or running audit-fix.
-5. Verifies the selected versions. Release cells run `npm test` with
-   `PI_OPENCODE_SDK` set, so real sessions run instead of skipping. Dedicated
-   refusal cells run `test:codemode-serialization`, which compares the raw
-   public runtime and asserts zero guest/host effects via Pi's real file loader.
+   peers**, before any override.
+4. Installs the exact Pi/TUI and CodeMode versions if they differ from the
+   default, without saving changes to the manifest or lockfile.
+5. Verifies the selected versions and runs `npm test` with `PI_OPENCODE_SDK`
+   set. Every cell checks that Pi’s real loader and scripted session exercised
+   the exact CodeMode release and that the full suite ran without skips.
 6. Removes the temp directory in `finally`, even on failure.
 
 It does not alter the source checkout's dependencies or personal Pi settings.
-The release pin this command installs and verifies is `@opencode/codemode`
-**2.3.0** with Effect **4.1.0**. The following counts describe PR #6's
+By default this command exercises all four Pi baselines with locked CodeMode
+**2.3.0** and Effect **4.1.0**. The following counts describe PR #6's
 independent dependency-only baseline, before the local presentation/loading
 changes. On Node **v22.23.4** (Linux x64), `npm test`
 passed **83** tests, failed **0**, and skipped **1** (`isolated real Pi SDK
@@ -128,15 +127,16 @@ PI_OPENCODE_TEST_VERSION=1.4.0 npm run test:pi-versions
 PI_OPENCODE_TEST_VERSION=1.5.0 npm run test:pi-versions
 ```
 
-To reproduce the refusal cells, repeat this command with `2.3.1` and `2.3.2`:
+To run the additional supported-version cells locally:
 
 ```sh
-PI_OPENCODE_TEST_VERSION=1.5.0 PI_OPENCODE_REJECTED_VERSION=2.3.2 npm run test:pi-versions
+PI_OPENCODE_TEST_VERSION=1.5.0 PI_OPENCODE_CODEMODE_VERSION=2.3.1 npm run test:pi-versions
+PI_OPENCODE_TEST_VERSION=1.5.0 PI_OPENCODE_CODEMODE_VERSION=2.3.2 npm run test:pi-versions
 ```
 
-`PI_OPENCODE_REJECTED_VERSION` accepts only those two releases and cannot be
-combined with `PI_OPENCODE_UPSTREAM_VERSION`. CI runs these lanes against both
-configured Node versions. Dependency lifecycle
+`PI_OPENCODE_CODEMODE_VERSION` accepts any of the three supported releases and
+cannot be combined with `PI_OPENCODE_UPSTREAM_VERSION`. These environment
+variables are for testing only. Dependency lifecycle
 scripts are deliberately disabled in this harness; ordinary checkout installs
 still use `npm ci`. No paid model calls, npm publication, release creation, or
 repository visibility changes are part of CI.
@@ -149,9 +149,10 @@ checks out the revision, installs the pinned Python Modal SDK from
 including the upstream version lookup, clean installs, full tests, and
 `npm pack --dry-run --json`. There are no Node test jobs on GitHub runners.
 Each workflow creates **one Modal app**, with at most six isolated cells running
-concurrently. The `main` workflow has **12 cells**: eight full runs with the
-release pin and four expected-refusal probes (two Node versions × two CodeMode
-candidates with Pi/TUI 1.5.0). The independent npm-latest workflow has **8**
+concurrently. The `main` workflow has **12 full-suite cells**: eight with the
+locked CodeMode baseline and four with the additional supported CodeMode
+releases (two Node versions × two releases with Pi/TUI 1.5.0). The independent
+npm-latest workflow has **8**
 compatibility cells and treats refusal as a failure. Both workflows let the
 other cells finish after a cell fails; any failure fails the aggregate check.
 
@@ -194,7 +195,7 @@ python -m unittest discover -s ci -p 'test_*.py'
 modal run ci/modal_ci.py::matrix
 modal run ci/modal_ci.py::matrix --upstream
 modal run ci/modal_ci.py::run_tests --node-version 22.19.0 --pi-version 1.4.0
-modal run ci/modal_ci.py::run_tests --node-version 24.x --pi-version 1.5.0 --rejected-version 2.3.2
+modal run ci/modal_ci.py::run_tests --node-version 24.x --pi-version 1.5.0 --codemode-version 2.3.2
 modal run ci/modal_ci.py::run_tests --node-version 24.x --pi-version 1.5.0 --upstream-version 2.3.2
 modal run ci/modal_ci.py::latest
 ```
@@ -204,10 +205,19 @@ matrix also resolves latest once, then sends that same exact version to all eigh
 remote calls. Its local entrypoint writes the version to `GITHUB_OUTPUT` and
 `GITHUB_STEP_SUMMARY`; CLI runs outside Actions do not require those files.
 
-### Expanded matrix verification
+### Local verification for multi-version support
 
-The 12 clean-copy cells were reproduced locally on macOS arm64 with Node
-**22.19.0** and **24.22.2**: each of the eight release cells passed **125**
+On macOS arm64, the **12** release compatibility cells passed on Node
+**22.19.0** and **24.22.2**. Each cell passed **126** tests with no skips,
+including real Pi sessions. The **2.3.2** upstream-mode cell also passed on
+Node **24.22.2** with Pi/TUI **1.5.0**. These runs used the clean-copy harness,
+not hosted Modal.
+
+### Historical 0.2.1 matrix verification
+
+Before 2.3.1 and 2.3.2 were supported, the 12 clean-copy cells were reproduced
+locally on macOS arm64 with Node **22.19.0** and **24.22.2**: each of the eight
+release cells passed **125**
 tests, and each of the four refusal cells passed **5**, with no skips or
 failures. On 24.22.2, selecting the same 2.3.2 artifact in upstream mode
 failed at runtime admission as intended. The Modal dispatcher unit tests
@@ -242,8 +252,8 @@ checks. PR #1 was verified through the GitHub REST API as authored by
 
 Checkout is pinned to the merged revision. Each qualifying PR gets its own run
 without a shared concurrency group dropping queued checks. This is separate from
-normal post-merge `main` CI, which tests the release pin and known refusal
-baselines after changes from every author reach the trusted branch.
+normal post-merge `main` CI, which tests the locked baseline and the other
+supported releases after changes from every author reach the trusted branch.
 
 Each run queries the public npm registry on Modal for `@opencode/codemode@latest`, then
 uses that exact resolved version across all eight Node/Pi combinations. Registry
@@ -251,9 +261,9 @@ lookup/install failures fail the check; there is no fallback to the pinned
 version. Each clean-copy run verifies the installed CodeMode version and checks
 runtime admission before running the full suite, including real SDK sessions
 with no skips. Versions are recorded in the job summary and test diagnostics.
-A version refused by the serialization policy fails this check with its
-diagnostic. This is a compatibility signal, not a reason to silently select
-an older version.
+An unverified version fails this check with `UnsupportedCodeModeVersion`.
+This is a signal to qualify that version explicitly, not a reason to silently
+select an older version.
 
 To reproduce one combination locally (network/install enabled):
 
@@ -648,21 +658,21 @@ The behavior does **not** split at 2.3.2: published 2.3.1 already differs from
 | Installed `@opencode/codemode` | Standalone public runtime | Pi extension |
 | --- | --- | --- |
 | 2.3.0 | Invokes custom `toJSON` before dispatch, including nested objects and arrays; an exception prevents dispatch. | Admitted, using the unmodified VM and bridge. |
-| 2.3.1, 2.3.2 | Drops the method; a method-only input becomes `{}`, existing fields stay unchanged, and a would-be exception does not prevent dispatch. | `UnsupportedCodeModeVersion` before guest execution or host catalog construction. |
+| 2.3.1, 2.3.2 | Drops the method; a method-only input becomes `{}`, existing fields stay unchanged, and a would-be exception does not run. | Admitted, using the unmodified VM and bridge. Pi may reject a missing or invalid field before the tool body runs. |
 
 The raw probe also compares invocation count, property key and receiver, ordinary
 function fields, nested and rejected promises, cycles and non-JSON values. Direct
 `this` is rejected by Pi preflight; receiver behavior is measured in the raw VM
 only. String-form `search` and guest `Buffer` exist in both newer artifacts but
-not the supported 2.3.0 release. Neither is exposed as a common feature.
+not 2.3.0. Neither is portable across the supported releases.
 
-Local verification on macOS arm64 with Node **22.23.1** and npm **10.9.8**:
-2.3.0 passed **125 tests with no failures or skips** in each real Pi/TUI cell
-(**0.99.0**, **1.3.0**, **1.4.0**, **1.5.0**). Actual 2.3.1 and 2.3.2
-installations each passed **5 probe tests**, including the expected refusal.
-The installed-artifact probes cover timeouts, cancellation and call budget;
-the full 2.3.0 suite also covers Pi validation, hooks, logs and host cleanup.
-These are local results, not a new Linux/Modal matrix run.
+The test suite checks the installed artifact’s exact inputs, conversion
+errors, invocation count, timeouts, cancellation, and call budget. The real
+Pi file loader verifies dispatch and conversion; an isolated Pi session checks
+that both conversion behaviors still go through schema validation, hooks,
+and call auditing. Separate lazy-loading tests verify that unverified releases
+are rejected before importing the runtime, running guest code, or reading the
+host catalog.
 
 [Upstream #64513](https://github.com/anomalyco/opencode/pull/64513) accepts
 dropping `toJSON`. The published `CodeMode.make` options expose tools, hooks,
@@ -673,15 +683,13 @@ after conversion; the missing guest receiver and method cannot be recovered.
 A guest `JSON.stringify`/`parse` round trip is also not equivalent: it rejects
 nested promises that the tool boundary awaits, and loses negative zero.
 
-To upgrade with parity, qualify a supported VM-level hook or a separately
-maintained runtime change that invokes the legacy converter before translation,
-under the same VM, timeout, cancellation and call limits. There is no host-side
-shim, source rewrite, or automatic fallback. The latest-upstream CI check
-reports an unsupported candidate as a failure before running the supported
-bridge suite.
+The extension therefore uses the installed runtime’s native behavior. There
+is no host-side shim, source rewrite, or automatic fallback. To get the same
+arguments on all versions, compute the object explicitly before the tool call.
+The latest-upstream CI check still fails early on unverified releases.
 
-Run `npm run test:codemode-serialization` under the pinned release or in a
-disposable copy with the candidate installed. For example, in that copy:
+Run `npm run test:codemode-serialization` under the locked release or in a
+disposable copy with another supported release installed. For example:
 
 ```sh
 npm ci
@@ -689,9 +697,9 @@ npm install --no-save --package-lock=false @opencode/codemode@2.3.2
 npm run test:codemode-serialization
 ```
 
-Repeat with 2.3.1. A passing candidate probe confirms the observed raw behavior
-and the extension’s refusal, **not** compatibility. Run `npm test` with the
-release pin for the full bridge and SDK regression suite.
+Repeat with 2.3.1. These focused tests cover conversion and the Pi loader;
+use the clean-copy compatibility matrix above for the full suite with real Pi
+sessions.
 
 ## Additional release checks
 

@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Security fixes target the latest released version, currently **0.2.0**.
+Security fixes target the latest published release.
 See [CHANGELOG.md](CHANGELOG.md) for the changes and release history.
 
 ## Host dependency security

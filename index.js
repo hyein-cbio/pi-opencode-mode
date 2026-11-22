@@ -49,11 +49,11 @@ async function callPiTool(ctx, name, input, signal) {
 }
 
 const CODEMODE_PACKAGE = "@opencode/codemode";
-const VERIFIED_CODEMODE_VERSION = "2.3.0";
+const VERIFIED_CODEMODE_VERSIONS = ["2.3.0", "2.3.1", "2.3.2"];
 
 class UnsupportedCodeModeVersion extends Error {
   constructor(reason) {
-    super(`Source was not executed. ${reason} Install ${CODEMODE_PACKAGE}@${VERIFIED_CODEMODE_VERSION} to preserve tool input serialization. No automatic delegation or replay was attempted.`);
+    super(`Source was not executed. ${reason} Install a verified ${CODEMODE_PACKAGE} version (${VERIFIED_CODEMODE_VERSIONS.join(", ")}). No automatic delegation or replay was attempted.`);
   }
 }
 
@@ -73,13 +73,10 @@ async function loadBackend() {
   if (manifest?.name !== CODEMODE_PACKAGE || typeof manifest.version !== "string" || !manifest.version) {
     throw new UnsupportedCodeModeVersion(`Could not identify the installed ${CODEMODE_PACKAGE} version from its resolved entry.`);
   }
-  // Admit only the exact verified release; a SemVer range would incorrectly
-  // promise behavior for other releases, prereleases, or build variants.
-  if (manifest.version !== VERIFIED_CODEMODE_VERSION) {
-    const reason = ["2.3.1", "2.3.2"].includes(manifest.version)
-      ? "it drops custom toJSON methods before tool input reaches Pi, with no public pre-conversion hook"
-      : "its tool input serialization is unverified";
-    throw new UnsupportedCodeModeVersion(`${CODEMODE_PACKAGE} ${JSON.stringify(manifest.version)} is not supported: ${reason}.`);
+  // Use the installed release as-is, including its tool input conversion.
+  // Unknown releases, prereleases and build variants have not been verified.
+  if (!VERIFIED_CODEMODE_VERSIONS.includes(manifest.version)) {
+    throw new UnsupportedCodeModeVersion(`${CODEMODE_PACKAGE} ${JSON.stringify(manifest.version)} is not supported: its tool input serialization is unverified.`);
   }
   const [{ CodeMode, Tool, toolError }, { Effect }] = await Promise.all([
     import(entry), import("effect"),

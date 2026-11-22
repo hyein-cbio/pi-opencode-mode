@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { createOpenCodeModeExtension } from "../index.js";
-import { commonInputCases, customToJSONCases } from "./fixtures/tool-input-serialization.js";
+import { commonInputCases, customToJSONCases, serializationProfile, serializationProfiles } from "./fixtures/tool-input-serialization.js";
 
 function registeredTool() {
   const tools = [];
@@ -39,7 +39,8 @@ test("package is one OpenCode-backed pi extension", () => {
   assert.ok(changelog.includes(`## ${pkg.version} —`), "document the package version");
   assert.deepEqual(pkg.pi.extensions, ["./index.js"]);
   assert.deepEqual(Object.keys(pkg.dependencies).sort(), ["@opencode/codemode", "acorn", "effect"]);
-  assert.equal(pkg.dependencies["@opencode/codemode"], "2.3.0");
+  assert.equal(pkg.dependencies["@opencode/codemode"], [...serializationProfiles.keys()].join(" || "));
+  assert.equal(lock.packages["node_modules/@opencode/codemode"].version, "2.3.0", "the development baseline still covers the oldest supported runtime");
   assert.equal(pkg.dependencies.effect, "4.1.0");
   assert.equal(pkg.dependencies.acorn, "8.15.0");
 });
@@ -149,7 +150,7 @@ test("runs a fresh confined program and calls one pi tool", async () => {
   assert.match(nested.content[0].text, /UnknownTool/);
 });
 
-test("custom toJSON methods serialize top-level and nested host tool inputs", async () => {
+test("the Pi bridge forwards the installed runtime’s top-level and nested input conversion", async () => {
   const calls = [];
   const ctx = {
     tools: [{ name: "read", parameters: { type: "object" } }],
@@ -160,7 +161,9 @@ test("custom toJSON methods serialize top-level and nested host tool inputs", as
   };
   const tool = registeredTool();
   const cases = [
-    ...customToJSONCases.map(({ name, code, rawOnly, legacy }) => ({ name, code, rawOnly, ...legacy })),
+    ...customToJSONCases.map(({ name, code, rawOnly, ...expectations }) => ({
+      name, code, rawOnly, ...expectations[serializationProfile],
+    })),
     ...commonInputCases,
   ];
   for (const { name, code, args, error, rawOnly, value = "mocked" } of cases) {

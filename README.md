@@ -2,11 +2,10 @@
 
 A small Pi extension that leaves native `codemode` in place and lets you choose OpenCode CodeMode too.
 
-**Version 0.2.1** is published on npm. It pins `@opencode/codemode`
-**2.3.0** and Effect **4.1.0**. See the [changelog](CHANGELOG.md) for
-release details.
+See the [changelog](CHANGELOG.md) for release details and
+[npm](https://www.npmjs.com/package/pi-opencode-mode) for published versions.
 
-It registers **`codemode_o`**, backed by `@opencode/codemode` 2.3.0 and Effect 4.1.0: another execution option for short, self-contained JavaScript-like programs that call Pi tools. Host calls retain Pi's validation, permission/result hooks, and nested-call audit; cancellation waits for host cleanup, and output keeps bounded, visible diagnostics.
+It registers **`codemode_o`**, backed by `@opencode/codemode` and Effect 4.1.0: another execution option for short, self-contained JavaScript-like programs that call Pi tools. Host calls retain Pi's validation, permission/result hooks, and nested-call audit; cancellation waits for host cleanup, and output keeps bounded, visible diagnostics.
 
 Short programs can be quick: see the [benchmark snapshot](#benchmark-snapshot) for measured comparisons with native `codemode`. Both can batch tool calls; this extension lets you use the OpenCode interpreter in Pi without replacing the native tool. Performance depends on the workload, and lower latency does not imply stronger isolation. You choose the tool: preflight can reject an unsuitable OpenCode program, but never switches tools or falls back automatically.
 
@@ -29,8 +28,8 @@ interpreter choice, not an OpenCode server or a replacement Pi CLI.
 
 ## Install
 
-To use **0.2.1 from an existing source checkout**, install its exact dependencies
-and load that checkout directly:
+To use an existing source checkout, install its locked dependencies and load
+that checkout directly:
 
 ```sh
 npm ci
@@ -38,17 +37,15 @@ pi -e "$PWD" --tools read,find,codemode,codemode_o
 ```
 
 Reload/restart Pi after updating the checkout. Alternatively, install the
-versioned npm package in Pi:
+latest published npm version in Pi:
 
 ```sh
-pi install npm:pi-opencode-mode@0.2.1
+pi install npm:pi-opencode-mode
 ```
 
-Or install the tagged Git source:
-
-```sh
-pi install git:github.com/hyein-cbio/pi-opencode-mode@v0.2.1
-```
+Append `@<version>` to pin a published npm version. To install from Git,
+choose a tag from [GitHub Releases](https://github.com/hyein-cbio/pi-opencode-mode/releases)
+and append it to `git:github.com/hyein-cbio/pi-opencode-mode` in the same way.
 
 Restart Pi after installation. To explicitly enable both code tools:
 
@@ -265,24 +262,28 @@ The historical `selectCodemodeRoute` helper and `ROUTE_LIMITS` alias remain for 
 - Raw LF/CR inside ordinary quoted JS strings is invalid: use a JS `\n` escape, or `\\n` when embedding that source in a JSON `code` string. Heredoc text, Korean, and `/` inside a correctly escaped string are data, not unsupported JS syntax. Preflight does not automatically repair escaping.
 - Results include the compatibility outcome in `details.preflight`. `details.route` is retained as legacy metadata, not an executed dispatch, a guarantee that native is available, or a recommendation for invalid source. Once OpenCode execution starts, any failure stays an OpenCode failure: **no automatic fallback, retry, or replay**, since host tools may already have produced effects.
 
-The supported Pi range is **>= 0.99.0, < 2.0.0**, with matching Pi/TUI versions. Pi 0.99.0 introduced the callable-tool context and native `codemode` required by this extension. CI runs the full suite and isolated real-SDK sessions with **0.99.0** (minimum), **1.3.0**, **1.4.0**, and **1.5.0** on Node **22.19.0** and **24.x**. On both Node baselines it also verifies that CodeMode **2.3.1** and **2.3.2** are rejected before guest execution, using the locked Pi/TUI **1.5.0** pair. The CI matrix is a set of regression baselines, not the complete list of supported versions; intermediate releases are not individually certified. All CI checks execute on Modal; GitHub Actions only dispatches them. See [Modal-backed CI](TESTING.md#modal-backed-ci) for token setup and the fork-PR policy.
+The supported Pi range is **>= 0.99.0, < 2.0.0**, with matching Pi/TUI versions. Pi 0.99.0 introduced the callable-tool context and native `codemode` required by this extension. CI runs the full suite and isolated real-SDK sessions with **0.99.0** (minimum), **1.3.0**, **1.4.0**, and **1.5.0** on Node **22.19.0** and **24.x**. On both Node baselines it also runs the full suite with CodeMode **2.3.1** and **2.3.2**, using the locked Pi/TUI **1.5.0** pair. The Pi matrix uses regression baselines; intermediate Pi releases are not individually certified. All CI checks execute on Modal; GitHub Actions only dispatches them. See [Modal-backed CI](TESTING.md#modal-backed-ci) for token setup and the fork-PR policy.
 
 ## CodeMode runtime version and tool input serialization
 
-Only the exact `@opencode/codemode` release **2.3.0** is supported. On the first
-execution that passes preflight, the extension resolves the CodeMode ESM entry,
-reads its owning package manifest, and imports that same entry only if the
-package name and version match. This is independent of the extension version,
-Pi version, and OpenCode CLI. Unverified releases (including prereleases and
-build variants) or unknown metadata produce `UnsupportedCodeModeVersion`
-before any guest runs or Pi tools are invoked. Restore the exact pin to recover.
+The extension supports `@opencode/codemode` **2.3.0, 2.3.1, and 2.3.2** and
+uses the installed release without a mode setting. The source checkout’s
+`npm ci` still uses **2.3.0**; a fresh install without a lockfile can resolve
+**2.3.2**. These versions are independent of the OpenCode CLI. After preflight,
+the extension checks the manifest that owns the resolved CodeMode ESM entry.
+Unverified releases (including prereleases and build variants) or unknown
+metadata produce `UnsupportedCodeModeVersion` before the guest runs or Pi
+tools are invoked.
 
-With 2.3.0, custom tool-input `toJSON()` methods run in the confined VM; if
-conversion throws, the affected tool is not called. **2.3.1 and 2.3.2** instead
-drop those methods before the input reaches Pi. The later behavior is
-intentional upstream and cannot be reversed by the Pi bridge. Neither string
-`search("query")` nor guest `Buffer` is part of the supported contract; use
-`search({ query: "query" })`. See [the comparison](TESTING.md#codemode-tool-input-serialization).
+With **2.3.0**, custom tool-input `toJSON()` methods run in the confined VM; if
+conversion throws, the affected tool is not called. **2.3.1 and 2.3.2** drop
+those methods before the input reaches Pi. An input with only `toJSON()`
+therefore becomes `{}` in the newer releases, and existing fields are passed
+unchanged. Pi still validates the resulting arguments on every version. For
+portable behavior, build the intended argument object explicitly before calling
+`tools.*` instead of relying on implicit `toJSON()`. Use `search({ query: "query" })`
+rather than string `search("query")`, and do not rely on guest `Buffer` across
+versions. See [the comparison](TESTING.md#codemode-tool-input-serialization).
 
 ## Execution and output contract
 
@@ -385,9 +386,9 @@ peers alone does not establish that an installed Pi host is safe.
 matrix. Each disposable copy first installs and audits the default lockfile
 (failing on moderate/high findings), then uses the exact Pi/TUI pair for that
 cell without saving overrides. The full suite includes real-SDK sessions on
-**0.99.0, 1.3.0, 1.4.0, and 1.5.0**. Separate cells check the expected refusal
-of known incompatible CodeMode versions, not compatibility with them. The
-harness does not audit-fix the legacy fixtures. See [TESTING.md](TESTING.md)
+**0.99.0, 1.3.0, 1.4.0, and 1.5.0** with locked CodeMode **2.3.0**.
+Separate cells run the same full suite on **2.3.1** and **2.3.2** with
+Pi/TUI **1.5.0**. The harness does not audit-fix the legacy fixtures. See [TESTING.md](TESTING.md)
 for reproduction commands and coverage limits.
 
 ## Project information

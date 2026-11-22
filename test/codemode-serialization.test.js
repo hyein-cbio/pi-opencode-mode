@@ -1,18 +1,15 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
-import { findPackageJSON } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { CodeMode, Tool } from "@opencode/codemode";
 import { Effect } from "effect";
-import { commonInputCases, customToJSONCases } from "./fixtures/tool-input-serialization.js";
+import { commonInputCases, customToJSONCases, installedCodeModeVersion as version, serializationProfile } from "./fixtures/tool-input-serialization.js";
 
-const { version } = JSON.parse(readFileSync(findPackageJSON(import.meta.resolve("@opencode/codemode")), "utf8"));
-const legacy = version === "2.3.0";
-assert.ok(["2.3.0", "2.3.1", "2.3.2"].includes(version), `No observed serialization baseline for CodeMode ${version}`);
+assert.ok(serializationProfile, `No observed serialization baseline for CodeMode ${version}`);
+const legacy = serializationProfile === "legacy";
 
 function runMock({ timeoutMs = 5_000, maxToolCalls = 64 } = {}) {
   const inputs = [];
@@ -29,7 +26,7 @@ function runMock({ timeoutMs = 5_000, maxToolCalls = 64 } = {}) {
 test(`published CodeMode ${version} tool-input conversion (not a Pi compatibility claim)`, async () => {
   const { inputs, run } = runMock();
   const cases = [
-    ...customToJSONCases.map(({ name, code, ...expected }) => ({ name, code, ...expected[legacy ? "legacy" : "dropsMethods"] })),
+    ...customToJSONCases.map(({ name, code, ...expected }) => ({ name, code, ...expected[serializationProfile] })),
     ...commonInputCases,
   ];
   for (const { name, code, args, error, value = "mocked" } of cases) {
@@ -96,7 +93,7 @@ test("string search and guest Buffer support are not shared across the tested re
   assert.equal((await run('return typeof Buffer;')).value, legacy ? "undefined" : "function");
 });
 
-test(`Pi extension ${legacy ? "admits the exact release" : "refuses unsafe inputs before guest execution"} (${version})`, async (t) => {
+test(`Pi loader uses CodeMode ${version} with its native input serialization`, async (t) => {
   const { DefaultResourceLoader, SettingsManager } = await import("@earendil-works/pi-coding-agent");
   const dir = await mkdtemp(join(tmpdir(), "pi-opencode-serialization-loader-"));
   t.after(() => rm(dir, { recursive: true, force: true }));
@@ -111,36 +108,30 @@ test(`Pi extension ${legacy ? "admits the exact release" : "refuses unsafe input
   const tool = loaded.extensions.flatMap((extension) => [...extension.tools.values()])
     .find((entry) => entry.definition.name === "codemode_o")?.definition;
   assert.ok(tool, "the real Pi SDK must load the extension from disk");
-  const { code } = customToJSONCases[0];
-  let catalogReads = 0;
-  const inputs = [];
-  const result = await tool.execute("serialization", {
-    code: `console.log("guest ran"); ${code}`,
-  }, undefined, undefined, {
-    get tools() {
-      catalogReads++;
-      return [{ name: "read", parameters: { type: "object" } }];
-    },
-    async executeTool(_name, args) {
-      inputs.push(args);
-      return { result: { content: [{ type: "text", text: "mocked" }] } };
-    },
-  });
-  assert.equal(result.details.preflight.supported, true);
-  if (legacy) {
-    assert.equal(result.details.ok, true, result.content[0].text);
-    assert.match(result.content[0].text, /guest ran/);
-    assert.equal(catalogReads, 1);
-    assert.deepEqual(inputs, [customToJSONCases[0].legacy.args]);
-  } else {
-    assert.equal(result.isError, true);
-    assert.equal(result.details.error.kind, "UnsupportedCodeModeVersion");
-    assert.ok(result.details.error.message.includes(`@opencode/codemode "${version}"`));
-    assert.match(result.content[0].text, /Source was not executed.*drops custom toJSON.*No automatic delegation or replay/);
-    assert.doesNotMatch(result.content[0].text, /guest ran/);
-    assert.deepEqual(result.details.calls, []);
-    assert.deepEqual(result.details.toolCalls, []);
-    assert.equal(catalogReads, 0);
-    assert.deepEqual(inputs, []);
+  for (const { name, code, rawOnly, ...expected } of customToJSONCases) {
+    if (rawOnly) continue;
+    const { args, error, value = "mocked" } = expected[serializationProfile];
+    const inputs = [];
+    const result = await tool.execute("serialization", { code }, undefined, undefined, {
+      tools: [{ name: "read", parameters: { type: "object" } }],
+      async executeTool(toolName, input) {
+        inputs.push({ name: toolName, input });
+        return { result: { content: [{ type: "text", text: "mocked" }] } };
+      },
+    });
+    assert.equal(result.details.preflight.supported, true, name);
+    assert.equal(result.details.ok, !error, `${name}: ${result.content[0].text}`);
+    if (error) {
+      assert.equal(result.details.error.kind, error.kind, name);
+      assert.match(result.details.error.message, error.message, name);
+      assert.deepEqual(inputs, [], name);
+      assert.deepEqual(result.details.calls, [], name);
+      assert.deepEqual(result.details.toolCalls, [], name);
+    } else {
+      assert.equal(JSON.parse(result.content[0].text), value, name);
+      assert.deepEqual(inputs, [{ name: "read", input: args }], name);
+      assert.deepEqual(result.details.toolCalls, [{ name: "read" }], name);
+      assert.deepEqual(result.details.calls.map(({ name: toolName, status }) => [toolName, status]), [["read", "ok"]], name);
+    }
   }
 });

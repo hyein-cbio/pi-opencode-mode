@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.2 — 2026-11-22
+
+- Support the installed `@opencode/codemode` **2.3.0, 2.3.1, or 2.3.2**
+  without a mode setting. The checkout lockfile still uses **2.3.0**; a fresh
+  install without a lockfile can select **2.3.2**. Unverified versions are
+  still rejected before guest execution.
+- Preserve each runtime’s tool-input behavior: **2.3.0** invokes custom
+  `toJSON()` methods; **2.3.1 and 2.3.2** discard them before Pi validates
+  the arguments. Build a plain argument object explicitly for portable calls.
+- Run the full suite, including real Pi sessions and version-specific
+  serialization assertions, on all three CodeMode releases.
+
 ## 0.2.1 — 2026-11-19
 
 ### Dependency update

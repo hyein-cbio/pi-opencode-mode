@@ -17,14 +17,14 @@ const pkg = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
 const upstreamVersion = process.env.PI_OPENCODE_UPSTREAM_VERSION;
 assert.ok(upstreamVersion === undefined || /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u.test(upstreamVersion),
   "PI_OPENCODE_UPSTREAM_VERSION must be an exact version, not a tag/range or empty value");
-// A refusal is success only in a dedicated lane for a known incompatible release.
-const rejectedVersion = process.env.PI_OPENCODE_REJECTED_VERSION;
-assert.ok(rejectedVersion === undefined || ["2.3.1", "2.3.2"].includes(rejectedVersion),
-  "PI_OPENCODE_REJECTED_VERSION must be a known rejected release: 2.3.1 or 2.3.2");
-assert.ok(upstreamVersion === undefined || rejectedVersion === undefined,
-  "Latest-upstream compatibility and expected refusal cannot be tested in the same cell");
-const override = upstreamVersion ?? rejectedVersion;
-const codemodeVersion = override ?? pkg.dependencies["@opencode/codemode"];
+const selectedCodeMode = process.env.PI_OPENCODE_CODEMODE_VERSION;
+const supportedCodeMode = pkg.dependencies["@opencode/codemode"].split(" || ");
+assert.ok(selectedCodeMode === undefined || supportedCodeMode.includes(selectedCodeMode),
+  `PI_OPENCODE_CODEMODE_VERSION must be one of ${supportedCodeMode.join(", ")}`);
+assert.ok(upstreamVersion === undefined || selectedCodeMode === undefined,
+  "Latest-upstream and supported-version overrides cannot be tested in the same cell");
+const override = upstreamVersion ?? selectedCodeMode;
+const codeModePath = "node_modules/@opencode/codemode";
 
 function run(args, cwd, env = {}) {
   return new Promise((resolve, reject) => {
@@ -46,7 +46,7 @@ function run(args, cwd, env = {}) {
 // Opt-in network/install suite. Never modifies the source checkout's dependency
 // tree and never shares a fixed temp directory with other runs.
 for (const version of versions) {
-  const lane = rejectedVersion ? `expected refusal of CodeMode ${rejectedVersion}` : `full suite with CodeMode ${codemodeVersion}`;
+  const lane = `full suite with ${override ? `CodeMode ${override}` : "locked CodeMode"}`;
   test(`${lane} on Pi SDK ${version}`, { timeout: 180_000 }, async (t) => {
     const dir = await mkdtemp(join(tmpdir(), "pi-opencode-compat-"));
     try {
@@ -55,10 +55,15 @@ for (const version of versions) {
       const manifestBefore = await readFile(join(dir, "package.json"), "utf8");
       const lockBefore = await readFile(join(dir, "package-lock.json"), "utf8");
       const defaultLock = JSON.parse(lockBefore);
+      const lockedCodeMode = defaultLock.packages[codeModePath].version;
+      const codemodeVersion = override ?? lockedCodeMode;
+      assert.ok(supportedCodeMode.includes(lockedCodeMode), "lockfile must use a supported runtime");
       const baseFlags = ["--ignore-scripts", "--no-audit", "--no-fund"];
       const install = await run(["ci", ...baseFlags], dir);
       assert.equal(install.code, 0, install.output);
       const defaultPi = defaultLock.packages["node_modules/@earendil-works/pi-coding-agent"].version;
+      const readPackage = async (path) => JSON.parse(await readFile(join(dir, path, "package.json"), "utf8"));
+      assert.equal((await readPackage(codeModePath)).version, lockedCodeMode, "audit the default runtime before any override");
       for (const name of ["pi-coding-agent", "pi-tui"]) {
         const key = `node_modules/@earendil-works/${name}`;
         const installed = JSON.parse(await readFile(join(dir, key, "package.json"), "utf8"));
@@ -68,16 +73,18 @@ for (const version of versions) {
       const audit = await run(["audit", "--audit-level=moderate"], dir);
       assert.equal(audit.code, 0, audit.output);
       t.diagnostic(`Default Pi/TUI ${defaultPi}: moderate/high audit passed before compatibility override`);
-      if (version !== defaultPi || override !== undefined) {
+      if (version !== defaultPi || codemodeVersion !== lockedCodeMode) {
+        // When replacing the SDK, pin CodeMode too: npm may otherwise resolve
+        // the public range afresh instead of preserving the audited baseline.
         const alternate = await run(["install", ...baseFlags, "--no-save", "--package-lock=false",
           `@earendil-works/pi-coding-agent@${version}`, `@earendil-works/pi-tui@${version}`,
-          ...(override === undefined ? [] : [`@opencode/codemode@${override}`]),
+          `@opencode/codemode@${codemodeVersion}`,
         ], dir);
         assert.equal(alternate.code, 0, alternate.output);
       }
       assert.equal(await readFile(join(dir, "package.json"), "utf8"), manifestBefore, "keep release manifest unchanged");
       assert.equal(await readFile(join(dir, "package-lock.json"), "utf8"), lockBefore, "keep release lockfile unchanged");
-      const installedCodeMode = JSON.parse(await readFile(join(dir, "node_modules/@opencode/codemode/package.json"), "utf8"));
+      const installedCodeMode = await readPackage(codeModePath);
       assert.equal(installedCodeMode.version, codemodeVersion, "must execute the requested CodeMode, not the lockfile version");
       t.diagnostic(`Testing actual @opencode/codemode ${installedCodeMode.version}`);
       const sdk = join(dir, "node_modules/@earendil-works/pi-coding-agent");
@@ -94,15 +101,13 @@ for (const version of versions) {
         const admission = await tool.execute("upstream-version", { code: "return 42;" }, undefined, undefined, { tools: [] });
         assert.equal(admission.details.ok, true, admission.content[0].text);
       }
-      const command = rejectedVersion ? ["run", "test:codemode-serialization"] : ["test"];
-      const result = await run(command, dir, { PI_OPENCODE_SDK: sdk, FORCE_COLOR: "0" });
+      const result = await run(["test"], dir, { PI_OPENCODE_SDK: sdk, FORCE_COLOR: "0" });
       assert.equal(result.code, 0, result.output);
-      if (rejectedVersion) {
-        assert.ok(result.output.includes(`Pi extension refuses unsafe inputs before guest execution (${rejectedVersion})`),
-          `the real Pi loader refusal probe must run for the exact selected release\n${result.output}`);
-      } else {
-        assert.ok(result.output.includes(`Actual SDK ${version};`), "the real-session suite must run");
-      }
+      assert.ok(result.output.includes(`Actual SDK ${version};`), "the real-session suite must run");
+      assert.ok(result.output.includes(`Pi loader uses CodeMode ${codemodeVersion} with its native input serialization`),
+        "the Pi loader probe must exercise the exact selected release");
+      assert.ok(result.output.includes(`CodeMode ${codemodeVersion} input conversion still passes through Pi validation and hooks`),
+        "the real Pi session must verify the selected runtime’s input behavior");
       // Node 22 prints TAP `#` comments. Node 24's default reporter uses `ℹ`.
       const summaries = [...result.output.matchAll(/^\s*\S+\s+tests (\d+)\r?\n\s*\S+\s+suites \d+\r?\n\s*\S+\s+pass (\d+)\r?\n\s*\S+\s+fail (\d+)\r?\n\s*\S+\s+cancelled \d+\r?\n\s*\S+\s+skipped (\d+)/gm)];
       const inner = summaries.at(-1);

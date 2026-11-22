@@ -237,15 +237,12 @@ test("host calls receive an idempotency key without changing input or call accou
   assert.equal(effectFromCodeMode, effectFromExtension);
   const installed = JSON.parse(readFileSync(new URL("../package.json", codemodeEntry), "utf8"));
   const pins = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).dependencies;
-  // The latest-upstream matrix installs PI_OPENCODE_UPSTREAM_VERSION over the release pin.
-  const upstream = process.env.PI_OPENCODE_UPSTREAM_VERSION;
-  assert.equal(installed.version, upstream || pins["@opencode/codemode"]);
-  if (upstream === undefined) {
-    // Release pin: CodeMode's exact dependencies must match this package's pins.
-    assert.equal(installed.dependencies.effect, pins.effect);
-    assert.equal(installed.dependencies.acorn, pins.acorn);
-  }
-  // Under any CodeMode version, the shared Effect module path asserted above is the real invariant.
+  const selected = process.env.PI_OPENCODE_UPSTREAM_VERSION ?? process.env.PI_OPENCODE_CODEMODE_VERSION;
+  if (selected !== undefined) assert.equal(installed.version, selected);
+  assert.ok(pins["@opencode/codemode"].split(" || ").includes(installed.version));
+  // All supported runtimes share the extension’s exact Effect and Acorn pins.
+  assert.equal(installed.dependencies.effect, pins.effect);
+  assert.equal(installed.dependencies.acorn, pins.acorn);
 
   const seen = [];
   const host = Tool.make({

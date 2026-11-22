@@ -18,7 +18,8 @@ NODE_IMAGES = {
 }
 CURRENT_PI = "1.5.0"
 PI_VERSIONS = ("0.99.0", "1.3.0", "1.4.0", CURRENT_PI)
-REJECTED_CODEMODE_VERSIONS = ("2.3.1", "2.3.2")
+BASELINE_CODEMODE = "2.3.0"
+SUPPORTED_CODEMODE_VERSIONS = (BASELINE_CODEMODE, "2.3.1", "2.3.2")
 EXACT_VERSION = re.compile(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?", re.ASCII)
 app = modal.App("pi-opencode-mode-ci")
 
@@ -48,24 +49,24 @@ node22_image = make_image("22.19.0")
 node24_image = make_image("24.x")
 
 
-def validate_versions(pi_version, upstream_version, rejected_version):
+def validate_versions(pi_version, upstream_version, codemode_version):
     if pi_version not in PI_VERSIONS:
         raise ValueError(f"Unsupported Pi version: {pi_version}")
     if upstream_version and not EXACT_VERSION.fullmatch(upstream_version):
         raise ValueError("Upstream version must be an exact npm version")
-    if rejected_version and rejected_version not in REJECTED_CODEMODE_VERSIONS:
-        raise ValueError(f"Expected refusal is not defined for CodeMode {rejected_version}")
-    if upstream_version and rejected_version:
-        raise ValueError("Latest-upstream compatibility and expected refusal are separate checks")
+    if codemode_version and codemode_version not in SUPPORTED_CODEMODE_VERSIONS:
+        raise ValueError(f"Unsupported CodeMode version: {codemode_version}")
+    if upstream_version and codemode_version:
+        raise ValueError("Latest-upstream and supported-version overrides are separate checks")
 
 
-def _run_tests(pi_version, upstream_version="", rejected_version=""):
-    validate_versions(pi_version, upstream_version, rejected_version)
+def _run_tests(pi_version, upstream_version="", codemode_version=""):
+    validate_versions(pi_version, upstream_version, codemode_version)
     env = {**os.environ, "PI_OPENCODE_TEST_VERSION": pi_version}
     # Ignore inherited test modes; only explicit cell parameters select an override.
     for key, version in (
         ("PI_OPENCODE_UPSTREAM_VERSION", upstream_version),
-        ("PI_OPENCODE_REJECTED_VERSION", rejected_version),
+        ("PI_OPENCODE_CODEMODE_VERSION", codemode_version),
     ):
         env.pop(key, None)
         if version:
@@ -90,13 +91,13 @@ test_node24 = app.function(
 
 
 @app.local_entrypoint()
-def run_tests(node_version: str, pi_version: str, upstream_version: str = "", rejected_version: str = ""):
+def run_tests(node_version: str, pi_version: str, upstream_version: str = "", codemode_version: str = ""):
     """Dispatch one matrix cell; no Node commands run locally."""
-    validate_versions(pi_version, upstream_version, rejected_version)
+    validate_versions(pi_version, upstream_version, codemode_version)
     functions = {"22.19.0": test_node22, "24.x": test_node24}
     if node_version not in functions:
         raise ValueError(f"Unsupported Node version: {node_version}")
-    functions[node_version].remote(pi_version, upstream_version, rejected_version)
+    functions[node_version].remote(pi_version, upstream_version, codemode_version)
 
 
 @app.function(image=node24_image, cpu=1, memory=512, timeout=120, retries=0)
@@ -134,25 +135,25 @@ def latest():
 
 @app.local_entrypoint()
 def matrix(upstream: bool = False):
-    """Run release/full-suite and refusal lanes, or the independent npm-latest check."""
+    """Run supported release suites, or the independent npm-latest check."""
     version = resolve_latest.remote() if upstream else ""
     if upstream:
         report_latest(version)
     cells = [(node, pi, version, "") for node in NODE_IMAGES for pi in PI_VERSIONS]
     if not upstream:
-        # Audit/verify the default Pi SDK with each known incompatible artifact
-        # on both Node baselines. This is not an npm-latest compatibility check.
-        cells += [(node, CURRENT_PI, "", rejected)
-                  for node in NODE_IMAGES for rejected in REJECTED_CODEMODE_VERSIONS]
+        # Run the same full suite with each additional supported runtime on
+        # both Node baselines, using the locked Pi/TUI pair.
+        cells += [(node, CURRENT_PI, "", candidate) for node in NODE_IMAGES
+                  for candidate in SUPPORTED_CODEMODE_VERSIONS if candidate != BASELINE_CODEMODE]
     failures = []
     # Share one app, with isolated dependencies per cell. Keep the original
     # concurrency cap even with the larger matrix to limit simultaneous work.
     with ThreadPoolExecutor(max_workers=6) as pool:
         pending = {pool.submit(run_tests, *cell): cell for cell in cells}
         for future in as_completed(pending):
-            node, pi, candidate, rejected = pending[future]
-            lane = (f"CodeMode {rejected} expected refusal" if rejected else
-                    f"CodeMode {candidate} (npm latest)" if candidate else "release-pinned CodeMode")
+            node, pi, upstream_version, codemode_version = pending[future]
+            lane = (f"CodeMode {upstream_version} (npm latest)" if upstream_version else
+                    f"CodeMode {codemode_version or BASELINE_CODEMODE}")
             label = f"Node {node} / Pi {pi} / {lane}"
             try:
                 future.result()

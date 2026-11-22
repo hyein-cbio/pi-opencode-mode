@@ -1,6 +1,6 @@
 {
   "name": "pi-opencode-mode",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "license": "MIT",
   "publishConfig": {
     "access": "public",
@@ -43,7 +43,7 @@
     "test:pi-versions": "node --test test/pi-versions.test.js"
   },
   "dependencies": {
-    "@opencode/codemode": "2.3.0",
+    "@opencode/codemode": "2.3.0 || 2.3.1 || 2.3.2",
     "acorn": "8.15.0",
     "effect": "4.1.0"
   },

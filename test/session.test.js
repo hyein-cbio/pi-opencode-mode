@@ -9,6 +9,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { Type } from "typebox";
 import { createOpenCodeModeExtension } from "../index.js";
 import { rawNewlineSource } from "./fixtures/preflight-source.js";
+import { installedCodeModeVersion, serializationProfile } from "./fixtures/tool-input-serialization.js";
 
 // Explicit local SDK package directory only. Never installs or discovers private settings.
 const sdk = process.env.PI_OPENCODE_SDK;
@@ -178,6 +179,27 @@ test("isolated real Pi SDK session", { skip: !sdk && "set PI_OPENCODE_SDK to a l
       assert.match(denied.details.calls[0].error, /permission denied/);
       const hidden = await run('return await tools.codemode({code: "return 1"});');
       assert.equal(hidden.isError, true);
+    });
+    await t.test(`CodeMode ${installedCodeModeVersion} input conversion still passes through Pi validation and hooks`, async () => {
+      const legacy = serializationProfile === "legacy";
+      const before = state.echoRuns;
+      const bothValid = await run('return await tools.safe_echo({ value: 7, toJSON() { return { value: 41 }; } });');
+      assert.equal(bothValid.isError, false);
+      assert.equal(bothValid.content[0].text, '"hooked"');
+      assert.equal(bothValid.nestedCalls.complete, true);
+      assert.deepEqual(bothValid.nestedCalls.calls.map(({ status }) => status), ["ok"]);
+      assert.deepEqual(bothValid.details.calls.map(({ args }) => JSON.parse(args)), [{ value: legacy ? 41 : 7 }]);
+      for (const type of ["call", "result"]) {
+        assert.equal(hooks.filter((event) => event.type === type && event.name === "safe_echo" && event.parent === bothValid.toolCallId).length, 1);
+      }
+      assert.equal(state.echoRuns, before + 1);
+
+      const methodOnly = await run('return await tools.safe_echo({ toJSON() { return { value: 41 }; } });');
+      assert.equal(methodOnly.details.preflight.supported, true);
+      assert.equal(methodOnly.isError, !legacy);
+      assert.equal(state.echoRuns, before + (legacy ? 2 : 1), "missing required value never enters the Pi tool body");
+      assert.deepEqual(methodOnly.details.calls.map(({ status }) => status), [legacy ? "ok" : "error"]);
+      assert.deepEqual(methodOnly.details.calls.map(({ args }) => JSON.parse(args)), [legacy ? { value: 41 } : {}]);
     });
     await t.test("String.raw and recovery suggestions survive real session storage", async () => {
       const raw = await run('return String.raw`python3 - <<PY\nprint("\\n")\nPY`;');

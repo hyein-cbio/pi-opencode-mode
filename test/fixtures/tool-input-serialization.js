@@ -1,3 +1,16 @@
+import { readFileSync } from "node:fs";
+import { findPackageJSON } from "node:module";
+
+export const { version: installedCodeModeVersion } = JSON.parse(
+  readFileSync(findPackageJSON(import.meta.resolve("@opencode/codemode")), "utf8"),
+);
+export const serializationProfiles = new Map([
+  ["2.3.0", "legacy"],
+  ["2.3.1", "dropsMethods"],
+  ["2.3.2", "dropsMethods"],
+]);
+export const serializationProfile = serializationProfiles.get(installedCodeModeVersion);
+
 // Programs used against both the Pi bridge and the public upstream runtime.
 // An empty input object is valid for this inert mock, so silent changes are observable.
 export const customToJSONCases = [

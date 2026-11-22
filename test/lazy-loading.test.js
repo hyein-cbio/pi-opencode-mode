@@ -67,7 +67,7 @@ test("unverified package metadata is rejected without evaluating the backend or 
       [undefined, /Could not identify/],
       ["{", /Could not identify/],
       [{ name: "different-package", version: "2.3.0" }, /Could not identify/],
-      ...["2.2.7", "2.3.2-rc.1", "2.3.0+custom", "2.3.10", "unknown"].map((version) =>
+      ...["2.2.7", "2.3.2-rc.1", "2.3.0+custom", "2.3.3", "2.3.10", "unknown"].map((version) =>
         [{ name: "@opencode/codemode", version }, /serialization is unverified/]),
     ];
     const paths = await Promise.all(fixtures.map(async ([manifest, diagnostic], index) => {
@@ -95,11 +95,13 @@ test("unverified package metadata is rejected without evaluating the backend or 
         let tool;
         let readCatalog = false;
         createOpenCodeModeExtension()({ registerTool(value) { tool = value; } });
-        const result = await tool.execute("unknown-version", { code: "return 42;" }, undefined, undefined, {
+        const result = await tool.execute("unknown-version", { code: 'console.log("guest ran"); return 42;' }, undefined, undefined, {
           get tools() { readCatalog = true; return []; }
         });
+        assert.equal(result.details.preflight.supported, true);
         assert.equal(result.details.error.kind, "UnsupportedCodeModeVersion", result.content[0].text);
         assert.match(result.details.error.message, new RegExp(diagnostic));
+        assert.doesNotMatch(result.content[0].text, /guest ran/);
         assert.equal(readCatalog, false);
         assert.deepEqual(result.details.toolCalls, []);
         assert.deepEqual(result.details.calls, []);
