@@ -28,9 +28,12 @@ function isValidToolName(name) {
 }
 
 function message(error) {
-  if (error instanceof Error && typeof error.message === "string") return error.message;
-  try { return String(error); }
-  catch { return "[unprintable error]"; }
+  try {
+    if (error instanceof Error && typeof error.message === "string") return error.message;
+    return String(error);
+  } catch {
+    return "[unprintable error]";
+  }
 }
 
 function textOf(result) {

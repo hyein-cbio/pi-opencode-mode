@@ -194,6 +194,7 @@ test("host errors and result formats keep the public bridge contract", async () 
     { toString() { throw new Error("unprintable"); } },
     Object.assign(new Error("x"), { message: undefined }),
     Object.assign(new Error("x"), { message: 123 }),
+    Object.defineProperty(new Error("x"), "message", { get() { throw new Error("message getter failed"); } }),
   ]) {
     const outer = await run("return 42;", { get tools() { throw thrown; } });
     assert.equal(outer.isError, true);
