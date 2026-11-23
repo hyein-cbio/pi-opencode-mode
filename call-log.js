@@ -89,16 +89,20 @@ export function createCallLog(onUpdate, maxCalls) {
       if (record) records.push(record);
       const startedAt = performance.now();
       publish();
+      let failed = false;
+      const markError = (error) => {
+        failed = true;
+        if (!record) return;
+        record.status = signal?.aborted ? "cancelled" : "error";
+        try { record.error = clip(error instanceof Error && typeof error.message === "string" ? error.message : String(error), 512); }
+        catch { record.error = "[error preview unavailable]"; }
+      };
       try {
-        const value = await invoke();
-        if (record) record.status = "ok";
+        const value = await invoke(markError);
+        if (record && !failed) record.status = "ok";
         return value;
       } catch (error) {
-        if (record) {
-          record.status = signal?.aborted ? "cancelled" : "error";
-          try { record.error = clip(error instanceof Error ? error.message : String(error), 512); }
-          catch { record.error = "[error preview unavailable]"; }
-        }
+        markError(error);
         throw error;
       } finally {
         if (record) record.durationMs = Math.max(0, performance.now() - startedAt);

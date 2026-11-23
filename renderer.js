@@ -222,7 +222,10 @@ export function createOpenCodeRenderers({ highlightSource = highlightCode, forma
       const callInputs = calls.flatMap((call) => [call.name, call.args, call.status, call.durationMs, call.error]);
       // Legacy/hook-replaced content remains authoritative. Never reconstruct
       // model-visible output from diagnostics, or clip it for a display cache.
-      const output = isPartial ? "" : (result.content ?? []).filter((block) => block.type === "text").map((block) => block.text).join("\n");
+      const output = isPartial ? "" : (Array.isArray(result?.content) ? result.content : [])
+        .filter((block) => block?.type === "text" && typeof block.text === "string")
+        .map((block) => block.text)
+        .join("\n");
       const warnings = result.details?.warnings?.length ?? 0;
       const truncated = result.details?.truncated;
       const color = context.isError || result.details?.ok === false ? "error" : "toolOutput";

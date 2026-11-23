@@ -25,7 +25,7 @@ test("isolated real Pi SDK session", { skip: !sdk && "set PI_OPENCODE_SDK to a l
   const state = { finished: 0, aborted: 0, settled: 0, starts: 0, echoRuns: 0, deniedRuns: 0 };
   const hooks = [];
   const callUpdates = [];
-  const names = ["codemode", "codemode_o", "safe_echo", "safe_slow", "safe_denied"];
+  const names = ["codemode", "codemode_o", "safe_echo", "safe_slow", "safe_denied", "safe_structured", "safe_deferred"];
   let session;
   try {
     const settingsManager = pi.SettingsManager.inMemory({ defaultTools: names, cacheWarming: "off", compaction: { enabled: false }, retry: { enabled: false } });
@@ -34,7 +34,7 @@ test("isolated real Pi SDK session", { skip: !sdk && "set PI_OPENCODE_SDK to a l
       noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
       additionalExtensionPaths: [],
       extensionFactories: [pi.createCodemodeExtension(), createOpenCodeModeExtension(), (api) => {
-        const register = (name, parameters, execute) => api.registerTool({ name, label: name, description: "Safe in-memory test stub", parameters, execute });
+        const register = (name, parameters, execute, extra = {}) => api.registerTool({ name, label: name, description: "Safe in-memory test stub", parameters, execute, ...extra });
         register("safe_echo", Type.Object({ value: Type.Number() }), async (_id, args) => {
           state.echoRuns++;
           await delay(10); // Let sibling nested calls pass hooks and enter their bodies.
@@ -44,6 +44,18 @@ test("isolated real Pi SDK session", { skip: !sdk && "set PI_OPENCODE_SDK to a l
           state.deniedRuns++;
           return { content: [{ type: "text", text: "should not run" }], details: {} };
         });
+        register("safe_structured", Type.Object({ exitCode: Type.Number() }), async (_id, args) => {
+          const structuredContent = { output: `code:${args.exitCode}`, exit_code: args.exitCode };
+          return {
+            content: [{ type: "text", text: `Command exited with code ${args.exitCode}` }],
+            details: {},
+            structuredContent,
+            ...(args.exitCode !== 0 ? { isError: true } : {}),
+          };
+        }, { outputSchema: Type.Object({ output: Type.String(), exit_code: Type.Number() }) });
+        register("safe_deferred", Type.Object({}), async () => ({
+          content: [{ type: "text", text: "from-deferred" }], details: {},
+        }), { exposure: "deferred" });
         register("safe_slow", Type.Object({ ms: Type.Optional(Type.Number()) }), async (_id, args, signal) => {
           state.starts++;
           state.signal = signal;
@@ -179,6 +191,17 @@ test("isolated real Pi SDK session", { skip: !sdk && "set PI_OPENCODE_SDK to a l
       assert.match(denied.details.calls[0].error, /permission denied/);
       const hidden = await run('return await tools.codemode({code: "return 1"});');
       assert.equal(hidden.isError, true);
+      const structuredFail = await run('return await tools.safe_structured({exitCode: 2});');
+      assert.equal(structuredFail.isError, false);
+      assert.deepEqual(JSON.parse(structuredFail.content[0].text), { output: "code:2", exit_code: 2 });
+      assert.equal(structuredFail.details.calls[0].status, "error");
+      assert.match(structuredFail.details.calls[0].error, /Command exited with code 2/);
+      assert.equal(structuredFail.nestedCalls.complete, true);
+      const declared = session.agent.state.tools.find((entry) => entry.name === "codemode_o");
+      assert.ok(declared && !declared.description.includes("safe_deferred"), "deferred tools stay out of codemode_o description");
+      const deferredCall = await run('return await tools.safe_deferred({});');
+      assert.equal(deferredCall.isError, false);
+      assert.equal(JSON.parse(deferredCall.content[0].text), "from-deferred");
     });
     await t.test(`CodeMode ${installedCodeModeVersion} input conversion still passes through Pi validation and hooks`, async () => {
       const legacy = serializationProfile === "legacy";
