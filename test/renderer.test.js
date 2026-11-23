@@ -399,3 +399,9 @@ test("all execution exit paths record finite duration without changing content",
   assert.ok(value.details.durationMs >= 20);
   assert.equal(value.content[0].text, '"done"');
 });
+
+test("result renderer tolerates malformed content arrays and non-string text blocks", () => {
+  assert.equal(render({ content: [null, undefined, { type: "text", text: 42 }, { type: "text", text: "ok" }], details: {} }), "\nok");
+  assert.equal(render({ content: null, details: {} }), "");
+  assert.equal(render({ content: "not-an-array", details: {} }), "");
+});

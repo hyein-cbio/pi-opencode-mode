@@ -242,3 +242,15 @@ test("preflight rejection has no fabricated call rows or running notifications",
     assert.deepEqual(result.details.toolCalls, []);
   }
 });
+
+test("non-throwing host error outcomes keep error status and bounded preview without rejecting", async () => {
+  const log = createCallLog(undefined, 64);
+  const value = await log.run("bash", { command: "exit 1" }, undefined, async (markError) => {
+    markError("Command exited with code 1");
+    return { output: "", exit_code: 1 };
+  });
+  assert.deepEqual(value, { output: "", exit_code: 1 });
+  assert.equal(log.snapshot()[0].status, "error");
+  assert.equal(log.snapshot()[0].error, "Command exited with code 1");
+  log.close();
+});

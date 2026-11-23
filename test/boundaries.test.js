@@ -189,4 +189,20 @@ test("host errors and result formats keep the public bridge contract", async () 
   aborted.abort(new Error("x".repeat(100_000)));
   bounded(await run('return 42;', ctx, aborted.signal), false);
   bounded(await run('return 42;', { get tools() { throw new Error("😀".repeat(100_000)); } }));
+  for (const thrown of [
+    Object.create(null),
+    { toString() { throw new Error("unprintable"); } },
+    Object.assign(new Error("x"), { message: undefined }),
+    Object.assign(new Error("x"), { message: 123 }),
+  ]) {
+    const outer = await run("return 42;", { get tools() { throw thrown; } });
+    assert.equal(outer.isError, true);
+    assert.equal(outer.details.error.kind, "ExecutionFailure");
+    bounded(outer, false);
+
+    ctx.executeTool = async () => { throw thrown; };
+    const nested = await run("return await tools.host({});", ctx);
+    assert.equal(nested.isError, true);
+    bounded(nested, false);
+  }
 });

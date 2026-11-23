@@ -9,6 +9,7 @@ const TOOL_NAME = "codemode_o";
 // Pi's built-in `codemode` stays registered. Guest programs cannot call either code tool.
 const HIDDEN_FROM_GUEST = new Set(["codemode", TOOL_NAME]);
 const LIMITS = { timeoutMs: 30_000, maxToolCalls: 64, maxOutputBytes: 65_536 };
+const MAX_LISTED_TOOLS = 64;
 const BASE = [
   "Confined OpenCode CodeMode v2, not Pi's QuickJS codemode. Prefer codemode_o for short, self-contained programs known to fit its supported syntax and limits.",
   "Write a JavaScript-like program. Use return, or a final expression. undefined becomes null.",
@@ -21,8 +22,15 @@ const BASE = [
   "SourceSyntaxError means fix the JS source before running it; PreflightParserError means the preflight parser failed. Neither recommends replaying the same source in native codemode.",
 ].join(" ");
 
+function isValidToolName(name) {
+  return typeof name === "string" && name.length > 0 && !HIDDEN_FROM_GUEST.has(name) &&
+    !name.split(".").includes("");
+}
+
 function message(error) {
-  return error instanceof Error ? error.message : String(error);
+  if (error instanceof Error && typeof error.message === "string") return error.message;
+  try { return String(error); }
+  catch { return "[unprintable error]"; }
 }
 
 function textOf(result) {
@@ -33,12 +41,17 @@ function textOf(result) {
   return parts.join("\n");
 }
 
-async function callPiTool(ctx, name, input, signal) {
+async function callPiTool(ctx, tool, input, signal, markError) {
   signal?.throwIfAborted();
   if (typeof ctx?.executeTool !== "function") {
     throw new Error("This pi context cannot call tools from codemode");
   }
+  const name = tool.name;
   const outcome = await ctx.executeTool(name, input ?? {}, { signal });
+  if (tool.outputSchema && outcome?.result?.structuredContent !== undefined) {
+    if (outcome?.isError) markError?.(textOf(outcome.result) || `Tool failed: ${name}`);
+    return outcome.result.structuredContent;
+  }
   if (outcome?.isError) throw new Error(textOf(outcome.result) || `Tool failed: ${name}`);
   if (outcome?.result?.structuredContent !== undefined) return outcome.result.structuredContent;
   const blocks = outcome?.result?.content ?? [];
@@ -108,10 +121,10 @@ function waitForBackend(getBackend, signal) {
 }
 
 function codeModeTools(ctx, signal, calls, { Tool, toolError, Effect }) {
-  const tools = {};
+  const tools = Object.create(null);
   for (const tool of ctx?.tools ?? []) {
     const name = tool?.name;
-    if (typeof name !== "string" || name.length === 0 || HIDDEN_FROM_GUEST.has(name)) continue;
+    if (!isValidToolName(name)) continue;
     tools[name] = Tool.make({
       description: typeof tool.description === "string" && tool.description ? tool.description : name,
       input: tool.parameters && typeof tool.parameters === "object" ? tool.parameters : { type: "object" },
@@ -121,7 +134,7 @@ function codeModeTools(ctx, signal, calls, { Tool, toolError, Effect }) {
         return Effect.ensuring(Effect.tryPromise({
           try: (interruption) => {
             const combined = signal ? AbortSignal.any([signal, interruption]) : interruption;
-            pending = calls.run(name, input, combined, () => callPiTool(ctx, name, input, combined));
+            pending = calls.run(name, input, combined, (markError) => callPiTool(ctx, tool, input, combined, markError));
             return pending;
           },
           catch: (error) => toolError(message(error)),
@@ -139,7 +152,9 @@ function codeModeTools(ctx, signal, calls, { Tool, toolError, Effect }) {
 // Bound before encoding arbitrary diagnostics; never allocate a buffer for an
 // unbounded host error. Cut only at UTF-8 boundaries (including astral text).
 function prefix(text, maxBytes) {
-  const bytes = Buffer.from(text.slice(0, maxBytes + 1), "utf8");
+  const source = typeof text === "string" ? text : message(text);
+  if (maxBytes <= 0) return "";
+  const bytes = Buffer.from(source.slice(0, maxBytes + 1), "utf8");
   let end = Math.min(bytes.length, maxBytes);
   if (end < bytes.length) {
     while (end > 0 && (bytes[end] & 0xc0) === 0x80) end--;
@@ -152,13 +167,17 @@ function diagnostics(result) {
   let used = 0;
   let truncated = false;
   function bound(diagnostic) {
-    const kind = prefix(diagnostic.kind, 64);
-    const message = prefix(diagnostic.message, 1024);
-    const suggestions = diagnostic.suggestions?.slice(0, 3).map((text) => prefix(text, 128));
-    truncated ||= kind !== diagnostic.kind || message !== diagnostic.message ||
-      (diagnostic.suggestions !== undefined && (diagnostic.suggestions.length > 3 ||
-        suggestions.some((text, index) => text !== diagnostic.suggestions[index])));
-    return { kind, message, ...(diagnostic.location ? { location: diagnostic.location } : {}), ...(suggestions ? { suggestions } : {}) };
+    const rawKind = typeof diagnostic?.kind === "string" ? diagnostic.kind : "ExecutionFailure";
+    const rawMessage = typeof diagnostic?.message === "string" ? diagnostic.message : message(diagnostic?.message);
+    const kind = prefix(rawKind, 64);
+    const text = prefix(rawMessage, 1024);
+    const suggestions = Array.isArray(diagnostic?.suggestions)
+      ? diagnostic.suggestions.slice(0, 3).map((entry) => prefix(typeof entry === "string" ? entry : message(entry), 128))
+      : undefined;
+    truncated ||= kind !== rawKind || text !== rawMessage ||
+      (Array.isArray(diagnostic?.suggestions) && (diagnostic.suggestions.length > 3 ||
+        suggestions.some((entry, index) => entry !== diagnostic.suggestions[index])));
+    return { kind, message: text, ...(diagnostic?.location ? { location: diagnostic.location } : {}), ...(suggestions ? { suggestions } : {}) };
   }
   const error = result.ok ? undefined : bound(result.error);
   used += error ? Buffer.byteLength(JSON.stringify(error)) : 0;
@@ -252,10 +271,17 @@ export function createOpenCodeModeExtension({ parseSource, loadRuntime = loadBac
       ...openCodeRenderers,
       prepareLoadout(loadout) {
         const names = [];
+        let omitted = 0;
+        const getExposure = typeof loadout?.getExposure === "function" ? loadout.getExposure : undefined;
         for (const tool of loadout?.callable ?? []) {
-          if (typeof tool?.name === "string" && !HIDDEN_FROM_GUEST.has(tool.name)) names.push(tool.name);
+          const name = tool?.name;
+          if (!isValidToolName(name) || getExposure?.(name) === "deferred") continue;
+          if (names.length < MAX_LISTED_TOOLS) names.push(name);
+          else omitted++;
         }
-        return { descriptions: { [TOOL_NAME]: `${BASE}\nCallable tools: ${names.join(", ") || "(none)"}` } };
+        const listed = names.join(", ") || "(none)";
+        const suffix = omitted > 0 ? ` (+${omitted} more; use search({ query: "" }))` : "";
+        return { descriptions: { [TOOL_NAME]: `${BASE}\nCallable tools: ${listed}${suffix}` } };
       },
       async execute(_toolCallId, params, signal, onUpdate, ctx) {
         const startedAt = performance.now();

@@ -190,10 +190,95 @@ test("the Pi bridge forwards the installed runtime’s top-level and nested inpu
   }
 });
 
-test("prepareLoadout lists callable tools and omits itself", () => {
+test("outputSchema tools resolve to structuredContent on isError while recording call failure", async () => {
+  const tool = registeredTool();
+  const structured = { output: "err\n", truncated: false, exit_code: 1, wall_time_seconds: 0.1 };
+  const bashResult = await tool.execute("bash-nonzero", {
+    code: 'return await tools.bash({ command: "exit 1" });',
+  }, undefined, undefined, {
+    tools: [{ name: "bash", parameters: { type: "object" }, outputSchema: { type: "object" } }],
+    async executeTool() {
+      return {
+        isError: true,
+        result: { content: [{ type: "text", text: "err\n\nCommand exited with code 1" }], structuredContent: structured },
+      };
+    },
+  });
+  assert.equal(bashResult.isError, undefined);
+  assert.equal(bashResult.details.ok, true);
+  assert.deepEqual(JSON.parse(bashResult.content[0].text), structured);
+  assert.equal(bashResult.details.calls[0].status, "error");
+  assert.match(bashResult.details.calls[0].error, /Command exited with code 1/);
+
+  const denied = await tool.execute("bash-denied", {
+    code: 'return await tools.bash({ command: "exit 1" });',
+  }, undefined, undefined, {
+    tools: [{ name: "bash", parameters: { type: "object" }, outputSchema: { type: "object" } }],
+    async executeTool() {
+      return { isError: true, result: { content: [{ type: "text", text: "permission denied" }] } };
+    },
+  });
+  assert.equal(denied.isError, true);
+  assert.match(denied.content[0].text, /permission denied/);
+  assert.equal(denied.details.calls[0].status, "error");
+
+  const plainError = await tool.execute("plain-error", {
+    code: 'return await tools.plain({});',
+  }, undefined, undefined, {
+    tools: [{ name: "plain", parameters: { type: "object" } }],
+    async executeTool() {
+      return {
+        isError: true,
+        result: { content: [{ type: "text", text: "plain failure" }], structuredContent: { ignored: true } },
+      };
+    },
+  });
+  assert.equal(plainError.isError, true);
+  assert.match(plainError.content[0].text, /plain failure/);
+});
+
+test("invalid dot-segment and __proto__ tool names do not break runtime construction", async () => {
+  const tool = registeredTool();
+  const result = await tool.execute("weird-names", {
+    code: 'return [await tools.read({ path: "a" }), 42];',
+  }, undefined, undefined, {
+    tools: [
+      { name: ".leading", parameters: { type: "object" } },
+      { name: "trailing.", parameters: { type: "object" } },
+      { name: "double..dot", parameters: { type: "object" } },
+      { name: ".", parameters: { type: "object" } },
+      { name: "__proto__", parameters: { type: "object" } },
+      { name: "read", parameters: { type: "object" } },
+    ],
+    async executeTool(name) {
+      return { result: { content: [{ type: "text", text: `called:${name}` }] } };
+    },
+  });
+  assert.equal(result.isError, undefined, result.content[0].text);
+  assert.equal(result.details.ok, true);
+  assert.deepEqual(JSON.parse(result.content[0].text), ["called:read", 42]);
+});
+
+test("prepareLoadout lists callable tools, omits deferred/invalid names, and bounds long catalogs", () => {
   const tool = registeredTool();
   const changes = tool.prepareLoadout({
+    callable: [
+      { name: "read" }, { name: "codemode" }, { name: "codemode_o" }, { name: "grep" },
+      { name: ".leading" }, { name: "trailing." }, { name: "a..b" }, { name: "mcp__late__search" },
+    ],
+    getExposure: (name) => (name === "mcp__late__search" ? "deferred" : "direct"),
+  });
+  assert.match(changes.descriptions.codemode_o, /Callable tools: read, grep$/);
+  assert.doesNotMatch(changes.descriptions.codemode_o, /mcp__late__search|\.leading|trailing\.|a\.\.b/);
+
+  const legacy = tool.prepareLoadout({
     callable: [{ name: "read" }, { name: "codemode" }, { name: "codemode_o" }, { name: "grep" }],
   });
-  assert.match(changes.descriptions.codemode_o, /Callable tools: read, grep/);
+  assert.match(legacy.descriptions.codemode_o, /Callable tools: read, grep$/);
+
+  const many = tool.prepareLoadout({
+    callable: Array.from({ length: 70 }, (_, index) => ({ name: `tool_${index}` })),
+  });
+  assert.match(many.descriptions.codemode_o, /Callable tools: tool_0, .*, tool_63 \(\+6 more; use search\(\{ query: "" \}\)\)$/);
+  assert.doesNotMatch(many.descriptions.codemode_o, /\btool_64\b/);
 });
