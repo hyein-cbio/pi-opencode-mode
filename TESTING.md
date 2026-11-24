@@ -6,7 +6,8 @@
 - Pi and Pi TUI **>= 0.99.0, < 2.0.0**, with matching versions.
 - Release CI covers Node **22.19.0 / 24.x** × Pi **0.99.0 / 1.3.0 / 1.4.0 / 1.5.0**.
 - The full suite runs with locked CodeMode **2.3.0** on those eight cells and
-  with each of **2.3.1 / 2.3.2** on both Node versions using **Pi/TUI 1.5.0**.
+  with each of **2.3.1 / 2.3.2 / 2.4.0 / 2.4.1** on both Node versions using
+  **Pi/TUI 1.5.0**.
 
 Pi 0.99.0 is the minimum supported version: it introduced the callable-tool
 context and native `codemode` used by this extension. The original loader/mock
@@ -23,8 +24,12 @@ The default `npm ci` tree now locks matching **Pi/TUI 1.5.0**. This is separate
 from the intentional **0.99.0 / 1.3.0 / 1.4.0** compatibility matrix; neither
 its versions nor the public **>= 0.99.0, < 2.0.0** peer range is narrowed.
 The checkout lockfile uses CodeMode **2.3.0** as the baseline, while the
-package manifest also allows **2.3.1** and **2.3.2**. Effect **4.1.0**,
-Acorn **8.15.0**, and the default Pi/TUI lockfile are unchanged.
+package manifest also allows **2.3.1, 2.3.2, 2.4.0, and 2.4.1**. Effect
+**4.1.0**, Acorn **8.15.0**, and the default Pi/TUI lockfile are unchanged.
+CodeMode 2.4.x moves the interpreter into its `psychoscript@0.2.1` dependency,
+which declares **Node.js >= 24**. The Node 22 matrix cells exercise runtime
+compatibility with npm’s default engine warning behavior; `engine-strict`
+rejects that dependency on Node 22. Use Node 24 or newer for CodeMode 2.4.x.
 
 For the default environment, check the **full** dependency tree, including peers:
 
@@ -40,7 +45,7 @@ fail that default-baseline check. It does not audit or automatically fix the
 intentionally old compatibility tree after the override. No `audit fix`,
 transitive dependency override or minimum-peer increase is used to hide alerts.
 The six older-Pi cells run with CodeMode **2.3.0**; the locked Pi pair runs
-with all three supported CodeMode releases.
+with all five supported CodeMode releases.
 
 An unbundled peer is not necessarily harmless: users running a vulnerable host
 can still be affected. Recommend an up-to-date matching Pi/TUI pair within the
@@ -70,7 +75,7 @@ To use the SDK installed by `npm ci`:
 PI_OPENCODE_SDK="$PWD/node_modules/@earendil-works/pi-coding-agent" npm test
 ```
 
-Expected result: **126 passed, 0 skipped**, including SDK sessions and the
+Expected result: **130 passed, 0 skipped**, including SDK sessions and the
 CodeMode version and serialization regressions. To run only the session suite:
 
 ```sh
@@ -132,9 +137,11 @@ To run the additional supported-version cells locally:
 ```sh
 PI_OPENCODE_TEST_VERSION=1.5.0 PI_OPENCODE_CODEMODE_VERSION=2.3.1 npm run test:pi-versions
 PI_OPENCODE_TEST_VERSION=1.5.0 PI_OPENCODE_CODEMODE_VERSION=2.3.2 npm run test:pi-versions
+PI_OPENCODE_TEST_VERSION=1.5.0 PI_OPENCODE_CODEMODE_VERSION=2.4.0 npm run test:pi-versions
+PI_OPENCODE_TEST_VERSION=1.5.0 PI_OPENCODE_CODEMODE_VERSION=2.4.1 npm run test:pi-versions
 ```
 
-`PI_OPENCODE_CODEMODE_VERSION` accepts any of the three supported releases and
+`PI_OPENCODE_CODEMODE_VERSION` accepts any of the five supported releases and
 cannot be combined with `PI_OPENCODE_UPSTREAM_VERSION`. These environment
 variables are for testing only. Dependency lifecycle
 scripts are deliberately disabled in this harness; ordinary checkout installs
@@ -149,9 +156,9 @@ checks out the revision, installs the pinned Python Modal SDK from
 including the upstream version lookup, clean installs, full tests, and
 `npm pack --dry-run --json`. There are no Node test jobs on GitHub runners.
 Each workflow creates **one Modal app**, with at most six isolated cells running
-concurrently. The `main` workflow has **12 full-suite cells**: eight with the
-locked CodeMode baseline and four with the additional supported CodeMode
-releases (two Node versions × two releases with Pi/TUI 1.5.0). The independent
+concurrently. The `main` workflow has **16 full-suite cells**: eight with the
+locked CodeMode baseline and eight with the additional supported CodeMode
+releases (two Node versions × four releases with Pi/TUI 1.5.0). The independent
 npm-latest workflow has **8**
 compatibility cells and treats refusal as a failure. Both workflows let the
 other cells finish after a cell fails; any failure fails the aggregate check.
@@ -163,7 +170,8 @@ reports `Latest CodeMode compatibility on Modal`.
 `ci/modal_ci.py` uses `node:22.19.0-bookworm-slim` and
 `node:24-bookworm-slim` with Python 3.11. Each test function has 1 CPU, 2 GiB
 memory, a 10-minute timeout, and no automatic retries. The GitHub job allows
-30 minutes for up to two waves of cells and dispatch overhead. Each cell also
+40 minutes for the `main` matrix (up to three waves) and 30 minutes for
+npm latest (up to two waves), including dispatch overhead. Each cell also
 runs the Python CI regression tests. Only package inputs, tests, and the CI Python files
 are uploaded; `.env`, `.git`, `.pi`, and local `node_modules` are excluded.
 The existing harness still installs dependencies in disposable copies, with
@@ -195,8 +203,8 @@ python -m unittest discover -s ci -p 'test_*.py'
 modal run ci/modal_ci.py::matrix
 modal run ci/modal_ci.py::matrix --upstream
 modal run ci/modal_ci.py::run_tests --node-version 22.19.0 --pi-version 1.4.0
-modal run ci/modal_ci.py::run_tests --node-version 24.x --pi-version 1.5.0 --codemode-version 2.3.2
-modal run ci/modal_ci.py::run_tests --node-version 24.x --pi-version 1.5.0 --upstream-version 2.3.2
+modal run ci/modal_ci.py::run_tests --node-version 24.x --pi-version 1.5.0 --codemode-version 2.4.1
+modal run ci/modal_ci.py::run_tests --node-version 24.x --pi-version 1.5.0 --upstream-version 2.4.1
 modal run ci/modal_ci.py::latest
 ```
 
@@ -205,7 +213,21 @@ matrix also resolves latest once, then sends that same exact version to all eigh
 remote calls. Its local entrypoint writes the version to `GITHUB_OUTPUT` and
 `GITHUB_STEP_SUMMARY`; CLI runs outside Actions do not require those files.
 
-### Local verification for multi-version support
+### Local verification for CodeMode 2.4.0 and 2.4.1
+
+On macOS arm64, Node **22.19.0** and **24.22.3** each passed the full
+**130-test** suite with no skips for all five supported CodeMode releases on
+Pi/TUI **1.5.0**. On both Node versions, the **2.4.1** latest-upstream check also
+passed with Pi/TUI **0.99.0, 1.3.0, and 1.4.0**.
+
+A fresh install of the 0.2.3 tarball with `engine-strict` on Node **24.22.3**
+selected CodeMode **2.4.1** and `psychoscript` **0.2.1**, executed the packaged
+extension, and passed `npm audit`. On Node **22.19.0**, the same fresh install
+with `engine-strict` rejected `psychoscript` with `EBADENGINE`, while the locked
+checkout installed successfully with `engine-strict`. This is local evidence,
+not a hosted Modal run.
+
+### Historical 0.2.2 multi-version verification
 
 On macOS arm64, the **12** release compatibility cells passed on Node
 **22.19.0** and **24.22.2**. Each cell passed **126** tests with no skips,
@@ -652,19 +674,19 @@ Local Node 24.22.3 is not the hosted `node:24` image.
 ## CodeMode tool input serialization
 
 The comparison uses the actual installed npm artifacts and inert input recorders.
-The behavior does **not** split at 2.3.2: published 2.3.1 already differs from
-2.3.0. This does not establish behavior for arbitrary older or newer versions.
+The behavior changes at 2.3.1, and the supported 2.4 releases retain the same
+conversion behavior. This does not establish behavior for unverified releases.
 
 | Installed `@opencode/codemode` | Standalone public runtime | Pi extension |
 | --- | --- | --- |
 | 2.3.0 | Invokes custom `toJSON` before dispatch, including nested objects and arrays; an exception prevents dispatch. | Admitted, using the unmodified VM and bridge. |
-| 2.3.1, 2.3.2 | Drops the method; a method-only input becomes `{}`, existing fields stay unchanged, and a would-be exception does not run. | Admitted, using the unmodified VM and bridge. Pi may reject a missing or invalid field before the tool body runs. |
+| 2.3.1, 2.3.2, 2.4.0, 2.4.1 | Drops the method; a method-only input becomes `{}`, existing fields stay unchanged, and a would-be exception does not run. | Admitted, using the unmodified VM and bridge. Pi may reject a missing or invalid field before the tool body runs. |
 
 The raw probe also compares invocation count, property key and receiver, ordinary
 function fields, nested and rejected promises, cycles and non-JSON values. Direct
 `this` is rejected by Pi preflight; receiver behavior is measured in the raw VM
-only. String-form `search` and guest `Buffer` exist in both newer artifacts but
-not 2.3.0. Neither is portable across the supported releases.
+only. String-form `search` and guest `Buffer` exist in the four newer artifacts
+but not 2.3.0. Neither is portable across the supported releases.
 
 The test suite checks the installed artifact’s exact inputs, conversion
 errors, invocation count, timeouts, cancellation, and call budget. The real
@@ -693,11 +715,11 @@ disposable copy with another supported release installed. For example:
 
 ```sh
 npm ci
-npm install --no-save --package-lock=false @opencode/codemode@2.3.2
+npm install --no-save --package-lock=false @opencode/codemode@2.4.1
 npm run test:codemode-serialization
 ```
 
-Repeat with 2.3.1. These focused tests cover conversion and the Pi loader;
+These focused tests cover conversion and the Pi loader;
 use the clean-copy compatibility matrix above for the full suite with real Pi
 sessions.
 

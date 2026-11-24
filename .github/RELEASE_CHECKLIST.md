@@ -15,7 +15,7 @@ and release/tag creation are explicit maintainer actions.
       CodeMode release (see [TESTING.md](../TESTING.md)).
 - [ ] Configure `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET` Actions secrets, keep
       `Node/Pi compatibility on Modal` out of required pull-request checks, and
-      confirm all twelve full compatibility cells pass after changes reach `main`.
+      confirm all sixteen full compatibility cells pass after changes reach `main`.
 - [ ] Inspect `npm pack --dry-run --json`; check for secrets in the tree and history.
 - [ ] Check the README walkthrough with a configured model and inspect the TUI.
 - [ ] Review `CHANGELOG.md`, supported versions, and known limits.

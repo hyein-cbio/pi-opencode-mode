@@ -8,6 +8,8 @@ export const serializationProfiles = new Map([
   ["2.3.0", "legacy"],
   ["2.3.1", "dropsMethods"],
   ["2.3.2", "dropsMethods"],
+  ["2.4.0", "dropsMethods"],
+  ["2.4.1", "dropsMethods"],
 ]);
 export const serializationProfile = serializationProfiles.get(installedCodeModeVersion);
 

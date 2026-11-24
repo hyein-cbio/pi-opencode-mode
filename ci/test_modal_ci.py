@@ -23,7 +23,7 @@ class ModalCITests(unittest.TestCase):
                 with self.subTest(node=node, pi=pi), patch.object(ci, target) as function:
                     ci.run_tests(node, pi, "2.2.5")
                     function.remote.assert_called_once_with(pi, "2.2.5", "")
-            for codemode in ("2.3.0", "2.3.1", "2.3.2"):
+            for codemode in ci.SUPPORTED_CODEMODE_VERSIONS:
                 with self.subTest(node=node, codemode=codemode), patch.object(ci, target) as function:
                     ci.run_tests(node, "1.5.0", codemode_version=codemode)
                     function.remote.assert_called_once_with("1.5.0", "", codemode)
@@ -47,19 +47,19 @@ class ModalCITests(unittest.TestCase):
                          for node in nodes for pi in ("0.99.0", "1.3.0", "1.4.0", "1.5.0")]
                 if not upstream:
                     cells += [(node, "1.5.0", "", codemode)
-                              for node in nodes for codemode in ("2.3.1", "2.3.2")]
+                              for node in nodes for codemode in ("2.3.1", "2.3.2", "2.4.0", "2.4.1")]
                 self.assertCountEqual([call.args for call in run.call_args_list], cells)
 
     def test_matrix_finishes_other_cells_and_propagates_failure(self):
         def cell(node, pi, upstream, codemode):
-            if (node, pi, codemode) == ("22.19.0", "0.99.0", "") or (node, codemode) == ("24.x", "2.3.2"):
+            if (node, pi, codemode) == ("22.19.0", "0.99.0", "") or (node, codemode) == ("24.x", "2.4.1"):
                 raise RuntimeError("cell failed")
         with patch.object(ci, "run_tests", side_effect=cell) as run:
             with self.assertRaises(RuntimeError) as failed:
                 ci.matrix()
-            self.assertEqual(run.call_count, 12)
+            self.assertEqual(run.call_count, 16)
             self.assertIn("Node 22.19.0 / Pi 0.99.0 / CodeMode 2.3.0", str(failed.exception))
-            self.assertIn("Node 24.x / Pi 1.5.0 / CodeMode 2.3.2", str(failed.exception))
+            self.assertIn("Node 24.x / Pi 1.5.0 / CodeMode 2.4.1", str(failed.exception))
 
     def test_matrix_lookup_failure_never_runs_pinned_fallback(self):
         with patch.object(ci, "resolve_latest") as lookup, patch.object(ci, "run_tests") as run:
@@ -71,13 +71,13 @@ class ModalCITests(unittest.TestCase):
     def test_reject_invalid_inputs_before_dispatch(self):
         for args in (("26.x", "1.4.0", ""), ("24.x", "0.1.0", ""),
                      ("24.x", "1.4.0", "latest"), ("24.x", "1.4.0", "2.2.5\n"),
-                     ("24.x", "1.5.0", "", "2.3.2-rc.1"), ("24.x", "1.5.0", "", "2.3.3"),
-                     ("24.x", "1.5.0", "2.3.2", "2.3.2")):
+                     ("24.x", "1.5.0", "", "2.4.1-rc.1"), ("24.x", "1.5.0", "", "2.4.2"),
+                     ("24.x", "1.5.0", "2.4.1", "2.4.1")):
             with self.subTest(args=args), self.assertRaises(ValueError):
                 ci.run_tests(*args)
 
     def test_full_suite_and_pack_with_selected_version(self):
-        for upstream, codemode in (("", ""), ("2.2.5", ""), ("", "2.3.1")):
+        for upstream, codemode in (("", ""), ("2.2.5", ""), ("", "2.4.1")):
             with self.subTest(upstream=upstream, codemode=codemode), patch.object(ci.subprocess, "run") as run:
                 with patch.dict(os.environ, {"PI_OPENCODE_UPSTREAM_VERSION": "stale", "PI_OPENCODE_CODEMODE_VERSION": "stale"}):
                     ci._run_tests("1.4.0", upstream, codemode)

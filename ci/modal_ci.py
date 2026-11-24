@@ -19,7 +19,7 @@ NODE_IMAGES = {
 CURRENT_PI = "1.5.0"
 PI_VERSIONS = ("0.99.0", "1.3.0", "1.4.0", CURRENT_PI)
 BASELINE_CODEMODE = "2.3.0"
-SUPPORTED_CODEMODE_VERSIONS = (BASELINE_CODEMODE, "2.3.1", "2.3.2")
+SUPPORTED_CODEMODE_VERSIONS = (BASELINE_CODEMODE, "2.3.1", "2.3.2", "2.4.0", "2.4.1")
 EXACT_VERSION = re.compile(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?", re.ASCII)
 app = modal.App("pi-opencode-mode-ci")
 

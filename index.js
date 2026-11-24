@@ -65,7 +65,7 @@ async function callPiTool(ctx, tool, input, signal, markError) {
 }
 
 const CODEMODE_PACKAGE = "@opencode/codemode";
-const VERIFIED_CODEMODE_VERSIONS = ["2.3.0", "2.3.1", "2.3.2"];
+const VERIFIED_CODEMODE_VERSIONS = ["2.3.0", "2.3.1", "2.3.2", "2.4.0", "2.4.1"];
 
 class UnsupportedCodeModeVersion extends Error {
   constructor(reason) {

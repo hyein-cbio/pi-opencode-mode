@@ -67,7 +67,7 @@ test("unverified package metadata is rejected without evaluating the backend or 
       [undefined, /Could not identify/],
       ["{", /Could not identify/],
       [{ name: "different-package", version: "2.3.0" }, /Could not identify/],
-      ...["2.2.7", "2.3.2-rc.1", "2.3.0+custom", "2.3.3", "2.3.10", "unknown"].map((version) =>
+      ...["2.2.7", "2.3.0+custom", "2.3.3", "2.4.1-rc.1", "2.4.1+custom", "2.4.2", "unknown"].map((version) =>
         [{ name: "@opencode/codemode", version }, /serialization is unverified/]),
     ];
     const paths = await Promise.all(fixtures.map(async ([manifest, diagnostic], index) => {

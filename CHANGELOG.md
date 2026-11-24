@@ -2,6 +2,11 @@
 
 ## 0.2.3 — 2026-11-24
 
+- Support `@opencode/codemode` **2.4.0** and **2.4.1** in addition to the
+  three **2.3.x** releases already supported. The checkout lockfile stays on
+  **2.3.0** to keep that baseline covered. For CodeMode 2.4.x, use Node.js
+  **24 or newer** to meet the new `psychoscript` dependency’s engine requirement.
+  Like 2.3.1 and 2.3.2, the new releases discard custom tool-input `toJSON()` methods.
 - Align `codemode_o` with Pi's native `codemode`: tools that declare
   `outputSchema` return `structuredContent` even on error. Nested failures
   still appear in the call log. Scripts that relied on rejection for a
