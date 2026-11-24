@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.3 — 2026-11-24
+
+- Align `codemode_o` with Pi's native `codemode`: tools that declare
+  `outputSchema` return `structuredContent` even on error. Nested failures
+  still appear in the call log. Scripts that relied on rejection for a
+  non-zero `bash` exit should check the returned `exit_code`.
+- Skip malformed tool names and register tools without prototype mutation.
+  Keep error diagnostics bounded when thrown values cannot be converted to text.
+- List up to 64 callable tools inline, omit deferred tools when Pi exposes
+  that metadata, and point to `search({ query: "" })` for longer lists.
+- Handle malformed result content in the terminal renderer.
+
 ## 0.2.2 — 2026-11-22
 
 - Support the installed `@opencode/codemode` **2.3.0, 2.3.1, or 2.3.2**
