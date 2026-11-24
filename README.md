@@ -59,7 +59,7 @@ into your project.
 
 ## Quick start
 
-Requires **Node.js >= 22.19.0**, npm, Git, and **Pi >= 0.99.0, < 2.0.0** with a configured model/provider. Check `node --version` and `pi --version`; if you are new to Pi, see its [quickstart](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/quickstart.md). In Pi, `/login` configures a provider and `/model` chooses a model. The extension does not need an OpenCode account or server; asking Pi to call it still uses your configured model.
+Requires **Node.js >= 22.19.0** for the locked source checkout, npm, Git, and **Pi >= 0.99.0, < 2.0.0** with a configured model/provider. Use **Node.js >= 24** with CodeMode 2.4.x. Check `node --version` and `pi --version`; if you are new to Pi, see its [quickstart](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/quickstart.md). In Pi, `/login` configures a provider and `/model` chooses a model. The extension does not need an OpenCode account or server; asking Pi to call it still uses your configured model.
 
 **Host security:** use an up-to-date, matching Pi/TUI pair within the supported
 range; the default development/test lockfile uses **1.5.0**. The older versions
@@ -262,22 +262,27 @@ The historical `selectCodemodeRoute` helper and `ROUTE_LIMITS` alias remain for 
 - Raw LF/CR inside ordinary quoted JS strings is invalid: use a JS `\n` escape, or `\\n` when embedding that source in a JSON `code` string. Heredoc text, Korean, and `/` inside a correctly escaped string are data, not unsupported JS syntax. Preflight does not automatically repair escaping.
 - Results include the compatibility outcome in `details.preflight`. `details.route` is retained as legacy metadata, not an executed dispatch, a guarantee that native is available, or a recommendation for invalid source. Once OpenCode execution starts, any failure stays an OpenCode failure: **no automatic fallback, retry, or replay**, since host tools may already have produced effects.
 
-The supported Pi range is **>= 0.99.0, < 2.0.0**, with matching Pi/TUI versions. Pi 0.99.0 introduced the callable-tool context and native `codemode` required by this extension. CI runs the full suite and isolated real-SDK sessions with **0.99.0** (minimum), **1.3.0**, **1.4.0**, and **1.5.0** on Node **22.19.0** and **24.x**. On both Node baselines it also runs the full suite with CodeMode **2.3.1** and **2.3.2**, using the locked Pi/TUI **1.5.0** pair. The Pi matrix uses regression baselines; intermediate Pi releases are not individually certified. All CI checks execute on Modal; GitHub Actions only dispatches them. See [Modal-backed CI](TESTING.md#modal-backed-ci) for token setup and the fork-PR policy.
+The supported Pi range is **>= 0.99.0, < 2.0.0**, with matching Pi/TUI versions. Pi 0.99.0 introduced the callable-tool context and native `codemode` required by this extension. CI runs the full suite and isolated real-SDK sessions with **0.99.0** (minimum), **1.3.0**, **1.4.0**, and **1.5.0** on Node **22.19.0** and **24.x**. On both Node baselines it also runs the full suite with CodeMode **2.3.1, 2.3.2, 2.4.0, and 2.4.1**, using the locked Pi/TUI **1.5.0** pair. The Pi matrix uses regression baselines; intermediate Pi releases are not individually certified. All CI checks execute on Modal; GitHub Actions only dispatches them. See [Modal-backed CI](TESTING.md#modal-backed-ci) for token setup and the fork-PR policy.
 
 ## CodeMode runtime version and tool input serialization
 
-The extension supports `@opencode/codemode` **2.3.0, 2.3.1, and 2.3.2** and
-uses the installed release without a mode setting. The source checkout’s
-`npm ci` still uses **2.3.0**; a fresh install without a lockfile can resolve
-**2.3.2**. These versions are independent of the OpenCode CLI. After preflight,
+The extension supports `@opencode/codemode` **2.3.0, 2.3.1, 2.3.2, 2.4.0,
+and 2.4.1** and uses the installed release without a mode setting. The source
+checkout’s `npm ci` still uses **2.3.0**; an install without a lockfile can
+resolve **2.4.1**. CodeMode 2.4.x depends on `psychoscript`, which declares
+**Node.js >= 24**. On Node.js 22, npm warns for that dependency and rejects it
+with `engine-strict` enabled. On Node.js 22 with `engine-strict`, use the locked
+source checkout or upgrade to Node.js 24 or newer for a fresh install.
+
+CodeMode package versions are independent of the OpenCode CLI. After preflight,
 the extension checks the manifest that owns the resolved CodeMode ESM entry.
 Unverified releases (including prereleases and build variants) or unknown
 metadata produce `UnsupportedCodeModeVersion` before the guest runs or Pi
 tools are invoked.
 
 With **2.3.0**, custom tool-input `toJSON()` methods run in the confined VM; if
-conversion throws, the affected tool is not called. **2.3.1 and 2.3.2** drop
-those methods before the input reaches Pi. An input with only `toJSON()`
+conversion throws, the affected tool is not called. The other four supported
+releases drop those methods before the input reaches Pi. An input with only `toJSON()`
 therefore becomes `{}` in the newer releases, and existing fields are passed
 unchanged. Pi still validates the resulting arguments on every version. For
 portable behavior, build the intended argument object explicitly before calling
@@ -387,8 +392,8 @@ matrix. Each disposable copy first installs and audits the default lockfile
 (failing on moderate/high findings), then uses the exact Pi/TUI pair for that
 cell without saving overrides. The full suite includes real-SDK sessions on
 **0.99.0, 1.3.0, 1.4.0, and 1.5.0** with locked CodeMode **2.3.0**.
-Separate cells run the same full suite on **2.3.1** and **2.3.2** with
-Pi/TUI **1.5.0**. The harness does not audit-fix the legacy fixtures. See [TESTING.md](TESTING.md)
+Separate cells run the same full suite on **2.3.1, 2.3.2, 2.4.0, and 2.4.1**
+with Pi/TUI **1.5.0**. The harness does not audit-fix the legacy fixtures. See [TESTING.md](TESTING.md)
 for reproduction commands and coverage limits.
 
 ## Project information
