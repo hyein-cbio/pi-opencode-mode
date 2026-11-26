@@ -12,74 +12,55 @@ import modal
 
 ROOT = Path(__file__).resolve().parent.parent
 WORKSPACE = "/workspace"
+MINIMUM_NODE = "22.19.0"
+LATEST_NODE = "24.x"  # The latest CodeMode's psychoscript dependency requires Node >= 24.
 NODE_IMAGES = {
-    "22.19.0": "node:22.19.0-bookworm-slim",
-    "24.x": "node:24-bookworm-slim",
+    MINIMUM_NODE: "node:22.19.0-bookworm-slim",
+    LATEST_NODE: "node:24-bookworm-slim",
 }
-CURRENT_PI = "1.5.0"
-PI_VERSIONS = ("0.99.0", "1.3.0", "1.4.0", CURRENT_PI)
-BASELINE_CODEMODE = "2.3.0"
-SUPPORTED_CODEMODE_VERSIONS = (BASELINE_CODEMODE, "2.3.1", "2.3.2", "2.4.0", "2.4.1")
-EXACT_VERSION = re.compile(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?", re.ASCII)
+PI_VERSIONS = ("0.99.0", "1.5.0")  # Minimum and locked Pi/TUI pairs.
+EXACT_VERSION = re.compile(r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)", re.ASCII)
 app = modal.App("pi-opencode-mode-ci")
 
 
 def make_image(node_version):
     image = (
         modal.Image.from_registry(NODE_IMAGES[node_version], add_python="3.11")
-        .env({"CI": "true", "NPM_CONFIG_REGISTRY": "https://registry.npmjs.org/"})
+        .env({"CI": "true", "NPM_CONFIG_REGISTRY": "https://registry.npmjs.org/", "NPM_CONFIG_ENGINE_STRICT": "true"})
         .workdir(WORKSPACE)
     )
     # Modal re-imports this module at /root/modal_ci.py in the container. Local
     # upload inputs must only be inspected on the dispatching machine.
     if not modal.is_local():
         return image
-    # The clean-copy harness installs dependencies itself. Upload only its inputs
-    # and CI self-tests, never .env, .git, .pi, node_modules, or local credentials.
+    # Upload only inputs for the clean-copy harness, never .env, .git, .pi,
+    # node_modules, or local credentials. The dispatcher self-tests run separately.
     package = json.loads((ROOT / "package.json").read_text())
     for path in [*package["files"], "package.json", "package-lock.json"]:
         image = image.add_local_file(ROOT / path, f"{WORKSPACE}/{path}")
     image = image.add_local_dir(ROOT / "test", f"{WORKSPACE}/test")
-    for path in ("modal_ci.py", "test_modal_ci.py"):
-        image = image.add_local_file(ROOT / "ci" / path, f"{WORKSPACE}/ci/{path}")
     return image
 
 
-node22_image = make_image("22.19.0")
-node24_image = make_image("24.x")
+node22_image = make_image(MINIMUM_NODE)
+node24_image = make_image(LATEST_NODE)
 
 
-def validate_versions(pi_version, upstream_version, codemode_version):
+def validate_versions(pi_version, codemode_version):
     if pi_version not in PI_VERSIONS:
-        raise ValueError(f"Unsupported Pi version: {pi_version}")
-    if upstream_version and not EXACT_VERSION.fullmatch(upstream_version):
-        raise ValueError("Upstream version must be an exact npm version")
-    if codemode_version and codemode_version not in SUPPORTED_CODEMODE_VERSIONS:
-        raise ValueError(f"Unsupported CodeMode version: {codemode_version}")
-    if upstream_version and codemode_version:
-        raise ValueError("Latest-upstream and supported-version overrides are separate checks")
+        raise ValueError(f"Not a Pi CI endpoint: {pi_version}")
+    if codemode_version and not EXACT_VERSION.fullmatch(codemode_version):
+        raise ValueError("CodeMode override must be an exact stable npm version")
 
 
-def _run_tests(pi_version, upstream_version="", codemode_version=""):
-    validate_versions(pi_version, upstream_version, codemode_version)
+def _run_tests(pi_version, codemode_version=""):
+    validate_versions(pi_version, codemode_version)
     env = {**os.environ, "PI_OPENCODE_TEST_VERSION": pi_version}
-    # Ignore inherited test modes; only explicit cell parameters select an override.
-    for key, version in (
-        ("PI_OPENCODE_UPSTREAM_VERSION", upstream_version),
-        ("PI_OPENCODE_CODEMODE_VERSION", codemode_version),
-    ):
-        env.pop(key, None)
-        if version:
-            env[key] = version
-    for command in (
-        ["node", "--version"],
-        ["python", "-m", "unittest", "discover", "-s", "ci", "-p", "test_*.py"],
-        ["npm", "run", "test:pi-versions"],
-        ["npm", "pack", "--dry-run", "--json"],
-    ):
-        print(f"+ {' '.join(command)}", flush=True)
-        # A failed test or pack must fail modal run and the GitHub check.
-        subprocess.run(command, cwd=WORKSPACE, env=env, check=True)
+    # An inherited override must not change a locked baseline cell.
+    env.pop("PI_OPENCODE_CODEMODE_VERSION", None)
+    if codemode_version:
+        env["PI_OPENCODE_CODEMODE_VERSION"] = codemode_version
+    subprocess.run(["npm", "run", "test:pi-versions"], cwd=WORKSPACE, env=env, check=True)
 
 
 test_node22 = app.function(
@@ -91,17 +72,17 @@ test_node24 = app.function(
 
 
 @app.local_entrypoint()
-def run_tests(node_version: str, pi_version: str, upstream_version: str = "", codemode_version: str = ""):
+def run_tests(node_version: str, pi_version: str, codemode_version: str = ""):
     """Dispatch one matrix cell; no Node commands run locally."""
-    validate_versions(pi_version, upstream_version, codemode_version)
-    functions = {"22.19.0": test_node22, "24.x": test_node24}
+    validate_versions(pi_version, codemode_version)
+    functions = {MINIMUM_NODE: test_node22, LATEST_NODE: test_node24}
     if node_version not in functions:
         raise ValueError(f"Unsupported Node version: {node_version}")
-    functions[node_version].remote(pi_version, upstream_version, codemode_version)
+    functions[node_version].remote(pi_version, codemode_version)
 
 
 @app.function(image=node24_image, cpu=1, memory=512, timeout=120, retries=0)
-def resolve_latest():
+def resolve_latest(check_package: bool = False):
     result = subprocess.run(
         ["npm", "view", "@opencode/codemode@latest", "version", "--json",
          "--registry=https://registry.npmjs.org/", "--prefer-online"],
@@ -109,7 +90,10 @@ def resolve_latest():
     )
     version = json.loads(result.stdout)
     if not isinstance(version, str) or not EXACT_VERSION.fullmatch(version):
-        raise ValueError(f"npm returned an invalid version: {version!r}")
+        raise ValueError(f"npm latest did not resolve to an exact stable version: {version!r}")
+    if check_package:
+        # Packaging does not depend on the cell's installed runtime or Pi version.
+        subprocess.run(["npm", "pack", "--dry-run", "--json"], cwd=WORKSPACE, check=True)
     print(f"Resolved @opencode/codemode@latest to {version}", flush=True)
     return version
 
@@ -120,7 +104,7 @@ def report_latest(version):
         ("GITHUB_OUTPUT", f"version={version}\n"),
         ("GITHUB_STEP_SUMMARY",
          f"Testing npm latest on Modal: **@opencode/codemode@{version}** "
-         f"across all {len(NODE_IMAGES) * len(PI_VERSIONS)} Node/Pi combinations.\n"),
+         f"on Node {LATEST_NODE} with Pi/TUI {' and '.join(PI_VERSIONS)}.\n"),
     ):
         if path := os.environ.get(variable):
             with open(path, "a") as stream:
@@ -134,26 +118,22 @@ def latest():
 
 
 @app.local_entrypoint()
-def matrix(upstream: bool = False):
-    """Run supported release suites, or the independent npm-latest check."""
-    version = resolve_latest.remote() if upstream else ""
-    if upstream:
-        report_latest(version)
-    cells = [(node, pi, version, "") for node in NODE_IMAGES for pi in PI_VERSIONS]
-    if not upstream:
-        # Run the same full suite with each additional supported runtime on
-        # both Node baselines, using the locked Pi/TUI pair.
-        cells += [(node, CURRENT_PI, "", candidate) for node in NODE_IMAGES
-                  for candidate in SUPPORTED_CODEMODE_VERSIONS if candidate != BASELINE_CODEMODE]
+def matrix(latest_only: bool = False):
+    """Check the locked baseline and npm latest, or only npm latest on schedule."""
+    manifest = json.loads((ROOT / "package.json").read_text())
+    baseline = manifest["dependencies"]["@opencode/codemode"].split(" || ")[0]
+    version = resolve_latest.remote(check_package=not latest_only)
+    report_latest(version)
+    cells = [] if latest_only else [(node, pi, "") for node in NODE_IMAGES for pi in PI_VERSIONS]
+    if latest_only or version != baseline:
+        cells += [(LATEST_NODE, pi, version) for pi in PI_VERSIONS]
     failures = []
-    # Share one app, with isolated dependencies per cell. Keep the original
-    # concurrency cap even with the larger matrix to limit simultaneous work.
+    # A full run is one wave of at most six isolated dependency installs.
     with ThreadPoolExecutor(max_workers=6) as pool:
         pending = {pool.submit(run_tests, *cell): cell for cell in cells}
         for future in as_completed(pending):
-            node, pi, upstream_version, codemode_version = pending[future]
-            lane = (f"CodeMode {upstream_version} (npm latest)" if upstream_version else
-                    f"CodeMode {codemode_version or BASELINE_CODEMODE}")
+            node, pi, version = pending[future]
+            lane = f"CodeMode {version} (npm latest)" if version else f"CodeMode {baseline} (locked)"
             label = f"Node {node} / Pi {pi} / {lane}"
             try:
                 future.result()

@@ -3,23 +3,24 @@ name: CI
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: '23 6 * * 1'
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
   compatibility:
     name: Node/Pi compatibility on Modal
-    # Modal credentials are available only after the tested revision reaches main.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    # GitHub only dispatches work; all checks execute in Modal containers.
+    # Only trusted main revisions dispatch with Modal credentials.
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule')
     runs-on: ubuntu-latest
-    # Three waves at the six-cell cap; allow all cells to report failures.
-    timeout-minutes: 40
+    # At most six cells run in one wave, plus image setup and the registry lookup.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -31,7 +32,9 @@ jobs:
           cache-dependency-path: ci/requirements.txt
       - name: Install Modal SDK
         run: python -m pip install -r ci/requirements.txt
-      - name: Supported CodeMode, Node and Pi combinations on Modal
+      - name: Test the Modal dispatcher
+        run: python -m unittest discover -s ci -p 'test_*.py'
+      - name: Check CodeMode endpoints on Modal
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
@@ -40,4 +43,8 @@ jobs:
             echo "::error::Set MODAL_TOKEN_ID and MODAL_TOKEN_SECRET as repository or organization Actions secrets."
             exit 1
           fi
-          modal run ci/modal_ci.py::matrix
+          if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
+            modal run ci/modal_ci.py::matrix --latest-only
+          else
+            modal run ci/modal_ci.py::matrix
+          fi

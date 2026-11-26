@@ -9,7 +9,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { Type } from "typebox";
 import { createOpenCodeModeExtension } from "../index.js";
 import { rawNewlineSource } from "./fixtures/preflight-source.js";
-import { installedCodeModeVersion, serializationProfile } from "./fixtures/tool-input-serialization.js";
+import { installedCodeModeVersion, currentSerializationProfile } from "./fixtures/tool-input-serialization.js";
 
 // Explicit local SDK package directory only. Never installs or discovers private settings.
 const sdk = process.env.PI_OPENCODE_SDK;
@@ -203,8 +203,8 @@ test("isolated real Pi SDK session", { skip: !sdk && "set PI_OPENCODE_SDK to a l
       assert.equal(deferredCall.isError, false);
       assert.equal(JSON.parse(deferredCall.content[0].text), "from-deferred");
     });
-    await t.test(`CodeMode ${installedCodeModeVersion} input conversion still passes through Pi validation and hooks`, async () => {
-      const legacy = serializationProfile === "legacy";
+    await t.test(`CodeMode ${installedCodeModeVersion()} input conversion still passes through Pi validation and hooks`, async () => {
+      const legacy = currentSerializationProfile() === "legacy";
       const before = state.echoRuns;
       const bothValid = await run('return await tools.safe_echo({ value: 7, toJSON() { return { value: 41 }; } });');
       assert.equal(bothValid.isError, false);

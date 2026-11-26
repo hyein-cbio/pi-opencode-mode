@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- Add an opt-in installer that checks for an existing CodeMode runtime before
+  dependency resolution. It saves exactly **2.3.0** if it finds **2.3.0 or
+  older**, or the exact npm **latest** version otherwise, if verified. An
+  unverified latest leaves the existing installation unchanged. The source
+  lockfile stays on **2.3.0**.
+- Support only the **2.3.0** baseline and the latest verified CodeMode
+  release (**2.4.2**). Intermediate installs must upgrade through the installer.
+  The latest endpoint discards custom tool-input `toJSON()` methods.
+- Reduce post-merge CI to six cells covering the two CodeMode endpoints at
+  the minimum and locked Pi/TUI versions. Check npm latest weekly on Node 24
+  rather than running a duplicate matrix on bot PR merges.
+
 ## 0.2.3 — 2026-11-24
 
 - Support `@opencode/codemode` **2.4.0** and **2.4.1** in addition to the

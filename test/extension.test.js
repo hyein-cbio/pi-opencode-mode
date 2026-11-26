@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { createOpenCodeModeExtension } from "../index.js";
-import { commonInputCases, customToJSONCases, serializationProfile, serializationProfiles } from "./fixtures/tool-input-serialization.js";
+import { commonInputCases, customToJSONCases, currentSerializationProfile } from "./fixtures/tool-input-serialization.js";
+import { CODEMODE_VERSIONS, baseline, verifiedLatest } from "../codemode-versions.js";
+
+const serializationProfile = currentSerializationProfile();
 
 function registeredTool() {
   const tools = [];
@@ -39,8 +42,12 @@ test("package is one OpenCode-backed pi extension", () => {
   assert.ok(changelog.includes(`## ${pkg.version} —`), "document the package version");
   assert.deepEqual(pkg.pi.extensions, ["./index.js"]);
   assert.deepEqual(Object.keys(pkg.dependencies).sort(), ["@opencode/codemode", "acorn", "effect"]);
-  assert.equal(pkg.dependencies["@opencode/codemode"], [...serializationProfiles.keys()].join(" || "));
-  assert.equal(lock.packages["node_modules/@opencode/codemode"].version, "2.3.0", "the development baseline still covers the oldest supported runtime");
+  assert.equal(CODEMODE_VERSIONS.length, 2);
+  assert.equal(baseline, "2.3.0");
+  assert.match(verifiedLatest, /^\d+\.\d+\.\d+$/u);
+  assert.notEqual(verifiedLatest, baseline);
+  assert.equal(pkg.bin["pi-opencode-mode-install"], "./install.js");
+  assert.equal(lock.packages["node_modules/@opencode/codemode"].version, baseline, "the development baseline still covers the oldest supported runtime");
   assert.equal(pkg.dependencies.effect, "4.1.0");
   assert.equal(pkg.dependencies.acorn, "8.15.0");
 });

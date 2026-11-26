@@ -8,6 +8,7 @@ import { Effect } from "effect";
 import { checkOpenCodeCompatibility } from "../route.js";
 import { createOpenCodeModeExtension } from "../index.js";
 import { command, escapedSource, rawNewlineSource } from "./fixtures/preflight-source.js";
+import { currentSerializationProfile } from "./fixtures/tool-input-serialization.js";
 
 function registeredTool(options) {
   let tool;
@@ -237,9 +238,9 @@ test("host calls receive an idempotency key without changing input or call accou
   assert.equal(effectFromCodeMode, effectFromExtension);
   const installed = JSON.parse(readFileSync(new URL("../package.json", codemodeEntry), "utf8"));
   const pins = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).dependencies;
-  const selected = process.env.PI_OPENCODE_UPSTREAM_VERSION ?? process.env.PI_OPENCODE_CODEMODE_VERSION;
+  const selected = process.env.PI_OPENCODE_CODEMODE_VERSION;
   if (selected !== undefined) assert.equal(installed.version, selected);
-  assert.ok(pins["@opencode/codemode"].split(" || ").includes(installed.version));
+  assert.ok(currentSerializationProfile(installed.version));
   // All supported runtimes share the extension’s exact Effect and Acorn pins.
   assert.equal(installed.dependencies.effect, pins.effect);
   assert.equal(installed.dependencies.acorn, pins.acorn);

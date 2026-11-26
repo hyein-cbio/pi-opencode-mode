@@ -5,25 +5,19 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { baseline } from "../codemode-versions.js";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const supportedVersions = ["0.99.0", "1.3.0", "1.4.0", "1.5.0"];
+const supportedVersions = ["0.99.0", "1.5.0"];
 const selected = process.env.PI_OPENCODE_TEST_VERSION;
 assert.ok(!selected || supportedVersions.includes(selected), `PI_OPENCODE_TEST_VERSION must be one of ${supportedVersions.join(", ")}`);
 const versions = selected ? [selected] : supportedVersions;
 const pkg = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
-// The upstream workflow resolves npm latest once for the entire matrix. Require
-// an exact version here so a failed lookup cannot silently test the release pin.
-const upstreamVersion = process.env.PI_OPENCODE_UPSTREAM_VERSION;
-assert.ok(upstreamVersion === undefined || /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u.test(upstreamVersion),
-  "PI_OPENCODE_UPSTREAM_VERSION must be an exact version, not a tag/range or empty value");
-const selectedCodeMode = process.env.PI_OPENCODE_CODEMODE_VERSION;
-const supportedCodeMode = pkg.dependencies["@opencode/codemode"].split(" || ");
-assert.ok(selectedCodeMode === undefined || supportedCodeMode.includes(selectedCodeMode),
-  `PI_OPENCODE_CODEMODE_VERSION must be one of ${supportedCodeMode.join(", ")}`);
-assert.ok(upstreamVersion === undefined || selectedCodeMode === undefined,
-  "Latest-upstream and supported-version overrides cannot be tested in the same cell");
-const override = upstreamVersion ?? selectedCodeMode;
+// The dispatcher resolves npm latest once. Never accept a tag/range or
+// silently use the lockfile when an explicit override is malformed.
+const override = process.env.PI_OPENCODE_CODEMODE_VERSION;
+assert.ok(override === undefined || /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/u.test(override),
+  "PI_OPENCODE_CODEMODE_VERSION must be an exact stable version, not a tag/range or empty value");
 const codeModePath = "node_modules/@opencode/codemode";
 
 function run(args, cwd, env = {}) {
@@ -57,7 +51,7 @@ for (const version of versions) {
       const defaultLock = JSON.parse(lockBefore);
       const lockedCodeMode = defaultLock.packages[codeModePath].version;
       const codemodeVersion = override ?? lockedCodeMode;
-      assert.ok(supportedCodeMode.includes(lockedCodeMode), "lockfile must use a supported runtime");
+      assert.equal(lockedCodeMode, baseline, "lockfile must use the legacy baseline");
       const baseFlags = ["--ignore-scripts", "--no-audit", "--no-fund"];
       const install = await run(["ci", ...baseFlags], dir);
       assert.equal(install.code, 0, install.output);
@@ -92,13 +86,13 @@ for (const version of versions) {
         const installed = JSON.parse(await readFile(join(dir, `node_modules/@earendil-works/${name}/package.json`), "utf8"));
         assert.equal(installed.version, version, "test the requested host version, not an inherited installation");
       }
-      if (upstreamVersion !== undefined) {
-        // Fail this check visibly on an incompatible npm latest, before running
-        // bridge tests that expect live tool dispatch (and wait for it).
+      if (override !== undefined) {
+        // Fail visibly if npm latest is not yet an admitted runtime endpoint,
+        // before running tests that expect live dispatch and wait for it.
         const { createOpenCodeModeExtension } = await import(pathToFileURL(join(dir, "index.js")).href);
         let tool;
         createOpenCodeModeExtension()({ registerTool(value) { tool = value; } });
-        const admission = await tool.execute("upstream-version", { code: "return 42;" }, undefined, undefined, { tools: [] });
+        const admission = await tool.execute("runtime-version", { code: "return 42;" }, undefined, undefined, { tools: [] });
         assert.equal(admission.details.ok, true, admission.content[0].text);
       }
       const result = await run(["test"], dir, { PI_OPENCODE_SDK: sdk, FORCE_COLOR: "0" });

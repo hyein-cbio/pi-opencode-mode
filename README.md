@@ -36,16 +36,49 @@ npm ci
 pi -e "$PWD" --tools read,find,codemode,codemode_o
 ```
 
-Reload/restart Pi after updating the checkout. Alternatively, install the
-latest published npm version in Pi:
+To install with **automatic CodeMode selection**, run the installer before
+registering the extension with Pi. From a source checkout:
 
 ```sh
-pi install npm:pi-opencode-mode
+extension_path=$(node ./install.js) && pi install "$extension_path"
 ```
 
-Append `@<version>` to pin a published npm version. To install from Git,
-choose a tag from [GitHub Releases](https://github.com/hyein-cbio/pi-opencode-mode/releases)
-and append it to `git:github.com/hyein-cbio/pi-opencode-mode` in the same way.
+For an npm release that includes the installer, use the same flow without a
+checkout:
+
+```sh
+extension_path=$(npx --yes --ignore-scripts --legacy-peer-deps --package=pi-opencode-mode -- pi-opencode-mode-install) &&
+  pi install "$extension_path"
+```
+
+The installer checks which `@opencode/codemode` can be resolved **before**
+installing. It looks in the previous installer-managed copy, then the standard
+project and user Pi npm installs of this extension, then the current directory. Pass
+`--from /path/to/existing/extension` to check a custom, project-local, or Git
+checkout first. It saves an exact dependency in the private npm project
+`pi-opencode-mode-runtime/` under `PI_CODING_AGENT_DIR` (default `~/.pi/agent`):
+
+| Existing CodeMode | Installed requirement |
+| --- | --- |
+| `2.3.0` or older | Exactly `2.3.0`, preserving the legacy tool-input serialization |
+| No resolvable package, or `2.3.1` or newer | npm `@opencode/codemode@latest`, if this extension has verified that exact version |
+
+If npm `latest` is not yet verified, the installer stops before changing any
+installation. It does not silently install an older version.
+
+If migrating from `npm:pi-opencode-mode` or another Pi source, run the installer
+first so it can see the old runtime. Then remove the old source with `pi remove`
+and register the printed path so Pi does not load two copies. To update an
+installer-managed copy, rerun the installer from the desired checkout or npm
+release; `pi update` does not update a local path. Use Node.js 24 or later for
+the latest branch. On Node.js 22 with `engine-strict`, use the source-checkout
+installer to avoid resolving the npm bootstrap package's dependencies first.
+
+Plain `pi install npm:pi-opencode-mode` (optionally append `@<version>`) or a
+[Git tag](https://github.com/hyein-cbio/pi-opencode-mode/releases) install uses
+Pi’s normal dependency resolution and **does not** apply this policy. The
+source checkout’s `npm ci` also does not apply it: that always installs the
+locked development baseline.
 
 Restart Pi after installation. To explicitly enable both code tools:
 
@@ -262,29 +295,26 @@ The historical `selectCodemodeRoute` helper and `ROUTE_LIMITS` alias remain for 
 - Raw LF/CR inside ordinary quoted JS strings is invalid: use a JS `\n` escape, or `\\n` when embedding that source in a JSON `code` string. Heredoc text, Korean, and `/` inside a correctly escaped string are data, not unsupported JS syntax. Preflight does not automatically repair escaping.
 - Results include the compatibility outcome in `details.preflight`. `details.route` is retained as legacy metadata, not an executed dispatch, a guarantee that native is available, or a recommendation for invalid source. Once OpenCode execution starts, any failure stays an OpenCode failure: **no automatic fallback, retry, or replay**, since host tools may already have produced effects.
 
-The supported Pi range is **>= 0.99.0, < 2.0.0**, with matching Pi/TUI versions. Pi 0.99.0 introduced the callable-tool context and native `codemode` required by this extension. CI runs the full suite and isolated real-SDK sessions with **0.99.0** (minimum), **1.3.0**, **1.4.0**, and **1.5.0** on Node **22.19.0** and **24.x**. On both Node baselines it also runs the full suite with CodeMode **2.3.1, 2.3.2, 2.4.0, and 2.4.1**, using the locked Pi/TUI **1.5.0** pair. The Pi matrix uses regression baselines; intermediate Pi releases are not individually certified. All CI checks execute on Modal; GitHub Actions only dispatches them. See [Modal-backed CI](TESTING.md#modal-backed-ci) for token setup and the fork-PR policy.
+The supported Pi range is **>= 0.99.0, < 2.0.0**, with matching Pi/TUI versions. Pi **0.99.0** introduced the callable-tool context required by this extension. CI tests that minimum and the locked **1.5.0** pair on Node **22.19.0** and **24.x** with CodeMode **2.3.0**, then tests npm `latest` on Node **24.x** with the same two Pi pairs. Intermediate Pi versions remain within the peer range but are not tested individually. See [Modal-backed CI](TESTING.md#modal-backed-ci).
 
 ## CodeMode runtime version and tool input serialization
 
-The extension supports `@opencode/codemode` **2.3.0, 2.3.1, 2.3.2, 2.4.0,
-and 2.4.1** and uses the installed release without a mode setting. The source
-checkout’s `npm ci` still uses **2.3.0**; an install without a lockfile can
-resolve **2.4.1**. CodeMode 2.4.x depends on `psychoscript`, which declares
-**Node.js >= 24**. On Node.js 22, npm warns for that dependency and rejects it
-with `engine-strict` enabled. On Node.js 22 with `engine-strict`, use the locked
-source checkout or upgrade to Node.js 24 or newer for a fresh install.
+The extension supports two exact `@opencode/codemode` versions: the **2.3.0**
+baseline and the **latest verified release** in the
+[`package.json` dependency](package.json). CodeMode package versions
+are independent of the OpenCode CLI. Use **Node.js >= 24** for the latest lane,
+which currently depends on `psychoscript`.
 
-CodeMode package versions are independent of the OpenCode CLI. After preflight,
-the extension checks the manifest that owns the resolved CodeMode ESM entry.
-Unverified releases (including prereleases and build variants) or unknown
-metadata produce `UnsupportedCodeModeVersion` before the guest runs or Pi
-tools are invoked.
+The npm dependency, installer, and runtime all use the same two exact
+versions. The installer refuses an unverified npm `latest` before changing
+anything. If an intermediate or otherwise unsupported release was installed
+separately, `codemode_o` returns `UnsupportedCodeModeVersion` before running
+guest code or invoking Pi tools.
 
 With **2.3.0**, custom tool-input `toJSON()` methods run in the confined VM; if
-conversion throws, the affected tool is not called. The other four supported
-releases drop those methods before the input reaches Pi. An input with only `toJSON()`
-therefore becomes `{}` in the newer releases, and existing fields are passed
-unchanged. Pi still validates the resulting arguments on every version. For
+conversion throws, the affected tool is not called. The latest verified
+release drops those methods before the input reaches Pi. An input with only
+`toJSON()` therefore becomes `{}`; existing fields pass through unchanged. Pi still validates the resulting arguments on every version. For
 portable behavior, build the intended argument object explicitly before calling
 `tools.*` instead of relying on implicit `toJSON()`. Use `search({ query: "query" })`
 rather than string `search("query")`, and do not rely on guest `Buffer` across
@@ -390,11 +420,11 @@ peers alone does not establish that an installed Pi host is safe.
 `npm run test:pi-versions` is a separate, **network/install-enabled** compatibility
 matrix. Each disposable copy first installs and audits the default lockfile
 (failing on moderate/high findings), then uses the exact Pi/TUI pair for that
-cell without saving overrides. The full suite includes real-SDK sessions on
-**0.99.0, 1.3.0, 1.4.0, and 1.5.0** with locked CodeMode **2.3.0**.
-Separate cells run the same full suite on **2.3.1, 2.3.2, 2.4.0, and 2.4.1**
-with Pi/TUI **1.5.0**. The harness does not audit-fix the legacy fixtures. See [TESTING.md](TESTING.md)
-for reproduction commands and coverage limits.
+cell without saving overrides. By default it uses CodeMode **2.3.0** with
+Pi/TUI **0.99.0** and **1.5.0**. On Node 24, set
+`PI_OPENCODE_CODEMODE_VERSION` to the exact npm `latest` version to verify that
+endpoint. The harness does not audit-fix the legacy fixtures. See
+[TESTING.md](TESTING.md) for reproduction commands and coverage limits.
 
 ## Project information
 

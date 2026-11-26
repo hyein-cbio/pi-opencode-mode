@@ -4,6 +4,7 @@ import { Type } from "typebox";
 import { PREFLIGHT_LIMITS, checkOpenCodeCompatibility } from "./route.js";
 import { openCodeRenderers } from "./renderer.js";
 import { createCallLog } from "./call-log.js";
+import { CODEMODE_PACKAGE, CODEMODE_VERSIONS } from "./codemode-versions.js";
 
 const TOOL_NAME = "codemode_o";
 // Pi's built-in `codemode` stays registered. Guest programs cannot call either code tool.
@@ -64,12 +65,9 @@ async function callPiTool(ctx, tool, input, signal, markError) {
   return textOf(outcome?.result);
 }
 
-const CODEMODE_PACKAGE = "@opencode/codemode";
-const VERIFIED_CODEMODE_VERSIONS = ["2.3.0", "2.3.1", "2.3.2", "2.4.0", "2.4.1"];
-
 class UnsupportedCodeModeVersion extends Error {
   constructor(reason) {
-    super(`Source was not executed. ${reason} Install a verified ${CODEMODE_PACKAGE} version (${VERIFIED_CODEMODE_VERSIONS.join(", ")}). No automatic delegation or replay was attempted.`);
+    super(`Source was not executed. ${reason} Install a verified ${CODEMODE_PACKAGE} version (${CODEMODE_VERSIONS.join(", ")}). No automatic delegation or replay was attempted.`);
   }
 }
 
@@ -90,9 +88,10 @@ async function loadBackend() {
     throw new UnsupportedCodeModeVersion(`Could not identify the installed ${CODEMODE_PACKAGE} version from its resolved entry.`);
   }
   // Use the installed release as-is, including its tool input conversion.
-  // Unknown releases, prereleases and build variants have not been verified.
-  if (!VERIFIED_CODEMODE_VERSIONS.includes(manifest.version)) {
-    throw new UnsupportedCodeModeVersion(`${CODEMODE_PACKAGE} ${JSON.stringify(manifest.version)} is not supported: its tool input serialization is unverified.`);
+  // Only the two supported endpoints may execute, not intermediate releases,
+  // future releases, prereleases, or build variants.
+  if (!CODEMODE_VERSIONS.includes(manifest.version)) {
+    throw new UnsupportedCodeModeVersion(`${CODEMODE_PACKAGE} ${JSON.stringify(manifest.version)} is outside the verified runtime endpoints.`);
   }
   const [{ CodeMode, Tool, toolError }, { Effect }] = await Promise.all([
     import(entry), import("effect"),

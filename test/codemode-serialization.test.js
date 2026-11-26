@@ -6,8 +6,10 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { CodeMode, Tool } from "@opencode/codemode";
 import { Effect } from "effect";
-import { commonInputCases, customToJSONCases, installedCodeModeVersion as version, serializationProfile } from "./fixtures/tool-input-serialization.js";
+import { commonInputCases, customToJSONCases, installedCodeModeVersion, currentSerializationProfile } from "./fixtures/tool-input-serialization.js";
 
+const version = installedCodeModeVersion();
+const serializationProfile = currentSerializationProfile();
 assert.ok(serializationProfile, `No observed serialization baseline for CodeMode ${version}`);
 const legacy = serializationProfile === "legacy";
 

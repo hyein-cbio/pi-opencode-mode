@@ -1,17 +1,14 @@
 import { readFileSync } from "node:fs";
 import { findPackageJSON } from "node:module";
+import { baseline, verifiedLatest } from "../../codemode-versions.js";
 
-export const { version: installedCodeModeVersion } = JSON.parse(
-  readFileSync(findPackageJSON(import.meta.resolve("@opencode/codemode")), "utf8"),
-);
-export const serializationProfiles = new Map([
-  ["2.3.0", "legacy"],
-  ["2.3.1", "dropsMethods"],
-  ["2.3.2", "dropsMethods"],
-  ["2.4.0", "dropsMethods"],
-  ["2.4.1", "dropsMethods"],
-]);
-export const serializationProfile = serializationProfiles.get(installedCodeModeVersion);
+export function installedCodeModeVersion() {
+  return JSON.parse(readFileSync(findPackageJSON(import.meta.resolve("@opencode/codemode")), "utf8")).version;
+}
+export function currentSerializationProfile(version = installedCodeModeVersion()) {
+  if (version === baseline) return "legacy";
+  if (version === verifiedLatest) return "dropsMethods";
+}
 
 // Programs used against both the Pi bridge and the public upstream runtime.
 // An empty input object is valid for this inert mock, so silent changes are observable.
